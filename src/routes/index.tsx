@@ -1,495 +1,558 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import heroImg from "@/assets/hero-space.jpg";
-import charNova from "@/assets/char-nova.jpg";
-import charZyra from "@/assets/char-zyra.jpg";
-import charRook from "@/assets/char-rook.jpg";
-import weapon1 from "@/assets/weapon-1.jpg";
+import { useEffect, useRef, useState, useCallback } from "react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "NEBULAR ECHO — 3D Space Combat Saga" },
-      { name: "description", content: "Pilot legendary starfighters across a fractured galaxy. Forge weapons, recruit heroes and climb the live leaderboard in Nebular Echo." },
-      { property: "og:title", content: "NEBULAR ECHO — 3D Space Combat Saga" },
-      { property: "og:description", content: "A neon 3D space RPG with story, characters, weapons, rewards and live leaderboards." },
+      { title: "NEBULAR ECHO — Play" },
+      { name: "description", content: "A neon space shooter you can play in your browser." },
     ],
   }),
-  component: Landing,
+  component: GameApp,
 });
 
-const characters = [
-  {
-    name: "Cmdr. NOVA",
-    role: "Vanguard Pilot",
-    img: charNova,
-    desc: "Last survivor of Earth Fleet 7. Time-dilated reflexes and a vendetta against the Hollow Sovereignty.",
-    stats: { Speed: 92, Aim: 88, Shield: 70 },
-  },
-  {
-    name: "ZYRA-9",
-    role: "Quantum Navigator",
-    img: charZyra,
-    desc: "Bio-engineered seer who reads jump-gate currents. Her tattoos rewrite when fate shifts.",
-    stats: { Speed: 74, Aim: 65, Shield: 95 },
-  },
-  {
-    name: "ROOK-X",
-    role: "Heavy Gunner",
-    img: charRook,
-    desc: "Salvaged war android with a rail-cannon arm and zero memory of the side he fought for.",
-    stats: { Speed: 58, Aim: 99, Shield: 82 },
-  },
-];
+type Screen = "menu" | "play" | "gameover" | "leaderboard";
 
-const weapons = [
-  { tier: "Mythic", name: "Pulse Ion XR-7", dmg: 480, fire: "Beam", color: "from-fuchsia-500 to-cyan-400" },
-  { tier: "Legendary", name: "Void-Splitter", dmg: 360, fire: "Burst", color: "from-cyan-400 to-violet-500" },
-  { tier: "Epic", name: "Nebula Lash", dmg: 290, fire: "Auto", color: "from-pink-500 to-purple-500" },
-  { tier: "Rare", name: "Cryo-Shard MK2", dmg: 210, fire: "Charge", color: "from-cyan-300 to-blue-500" },
-];
+interface Entity { x: number; y: number; vx: number; vy: number; r: number; hp?: number; t?: number; type?: string; }
+interface Star { x: number; y: number; z: number; }
 
-const leaderboard = [
-  { rank: 1, name: "VEX_NULL", score: 184_220, fleet: "Crimson Wake" },
-  { rank: 2, name: "Cmdr.Nova", score: 172_980, fleet: "Echo Division" },
-  { rank: 3, name: "ZYRA_9", score: 168_104, fleet: "Quantum Drift" },
-  { rank: 4, name: "ROOK.X", score: 159_440, fleet: "Iron Halo" },
-  { rank: 5, name: "Solstice", score: 151_872, fleet: "Pale Comet" },
-  { rank: 6, name: "Hex.Mira", score: 146_005, fleet: "Echo Division" },
-];
+const LB_KEY = "nebular_echo_lb_v1";
+const UP_KEY = "nebular_echo_up_v1";
 
-const updates = [
-  { v: "v2.4 — RIFT", date: "Live now", title: "The Rift Awakens", desc: "New PvE raid 'Singularity Heart', co-op of 3, drops Mythic Pulse Ion XR-7." },
-  { v: "v2.5 — TIDES", date: "In 12 days", title: "Tides of the Hollow", desc: "Dynamic faction war: planet ownership shifts every 6 hours based on global leaderboard." },
-  { v: "v3.0 — EXODUS", date: "Q3", title: "Player-built Stations", desc: "Construct living dockyards, rent hangars to other commanders and earn passive credits." },
-];
+function loadLB(): { name: string; score: number; wave: number }[] {
+  if (typeof window === "undefined") return [];
+  try { return JSON.parse(localStorage.getItem(LB_KEY) || "[]"); } catch { return []; }
+}
+function saveLB(name: string, score: number, wave: number) {
+  const lb = loadLB();
+  lb.push({ name, score, wave });
+  lb.sort((a, b) => b.score - a.score);
+  localStorage.setItem(LB_KEY, JSON.stringify(lb.slice(0, 10)));
+}
+function loadUp(): { dmg: number; fire: number; shield: number; credits: number } {
+  if (typeof window === "undefined") return { dmg: 1, fire: 1, shield: 1, credits: 0 };
+  try { return JSON.parse(localStorage.getItem(UP_KEY) || "") || { dmg: 1, fire: 1, shield: 1, credits: 0 }; }
+  catch { return { dmg: 1, fire: 1, shield: 1, credits: 0 }; }
+}
+function saveUp(u: ReturnType<typeof loadUp>) { localStorage.setItem(UP_KEY, JSON.stringify(u)); }
 
-function Stars() {
-  // deterministic random for SSR safety
-  const stars = Array.from({ length: 60 }, (_, i) => ({
-    top: (i * 37) % 100,
-    left: (i * 53) % 100,
-    size: (i % 3) + 1,
-    delay: (i % 7) * 0.4,
-  }));
+function GameApp() {
+  const [screen, setScreen] = useState<Screen>("menu");
+  const [name, setName] = useState("PILOT");
+  const [hud, setHud] = useState({ score: 0, wave: 1, hp: 100, credits: 0 });
+  const [lb, setLb] = useState<ReturnType<typeof loadLB>>([]);
+  const [up, setUp] = useState(loadUp());
+
+  useEffect(() => { setLb(loadLB()); }, [screen]);
+
+  const onGameOver = useCallback((score: number, wave: number, credits: number) => {
+    saveLB(name || "PILOT", score, wave);
+    const nu = { ...up, credits: up.credits + credits };
+    saveUp(nu); setUp(nu);
+    setHud((h) => ({ ...h, score, wave, credits }));
+    setScreen("gameover");
+  }, [name, up]);
+
   return (
-    <div className="pointer-events-none absolute inset-0 overflow-hidden">
-      {stars.map((s, i) => (
-        <span
-          key={i}
-          className="absolute rounded-full bg-white animate-twinkle"
-          style={{
-            top: `${s.top}%`,
-            left: `${s.left}%`,
-            width: s.size,
-            height: s.size,
-            animationDelay: `${s.delay}s`,
-          }}
+    <div className="relative h-[100dvh] w-full overflow-hidden bg-background text-foreground">
+      <BackgroundFX />
+      {screen === "menu" && (
+        <Menu
+          name={name} setName={setName}
+          onPlay={() => setScreen("play")}
+          onLB={() => setScreen("leaderboard")}
+          up={up} setUp={(u) => { saveUp(u); setUp(u); }}
         />
-      ))}
+      )}
+      {screen === "play" && (
+        <Game upgrades={up} onHud={setHud} onEnd={onGameOver} onQuit={() => setScreen("menu")} hud={hud} />
+      )}
+      {screen === "gameover" && (
+        <GameOver hud={hud} onRetry={() => setScreen("play")} onMenu={() => setScreen("menu")} />
+      )}
+      {screen === "leaderboard" && (
+        <Leaderboard lb={lb} onBack={() => setScreen("menu")} />
+      )}
     </div>
   );
 }
 
-function Landing() {
-  const [scrolled, setScrolled] = useState(false);
-  useEffect(() => {
-    const on = () => setScrolled(window.scrollY > 20);
-    on();
-    window.addEventListener("scroll", on);
-    return () => window.removeEventListener("scroll", on);
-  }, []);
-
+function BackgroundFX() {
   return (
-    <div className="relative min-h-screen bg-background text-foreground bg-nebula">
-      <Stars />
+    <div className="pointer-events-none absolute inset-0 bg-nebula">
+      <div className="absolute inset-0 grid-bg opacity-20" />
+    </div>
+  );
+}
 
-      {/* NAV */}
-      <header
-        className={`fixed inset-x-0 top-0 z-50 transition-all ${
-          scrolled ? "py-3 backdrop-blur-xl bg-background/70 border-b border-border" : "py-5"
-        }`}
-      >
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6">
-          <a href="#top" className="flex items-center gap-2 font-display text-lg font-black tracking-widest">
-            <span className="inline-block h-3 w-3 rounded-sm bg-gradient-to-br from-fuchsia-500 to-cyan-400 neon-glow" />
-            NEBULAR<span className="text-gradient">ECHO</span>
-          </a>
-          <nav className="hidden gap-8 text-sm text-muted-foreground md:flex">
-            {["Story", "Heroes", "Arsenal", "Updates", "Rewards", "Leaderboard"].map((n) => (
-              <a key={n} href={`#${n.toLowerCase()}`} className="transition-colors hover:text-foreground">
-                {n}
-              </a>
-            ))}
-          </nav>
-          <a
-            href="#play"
-            className="rounded-full bg-gradient-to-r from-fuchsia-500 to-cyan-400 px-5 py-2 text-sm font-bold text-background neon-glow transition-transform hover:scale-105"
+function Menu({ name, setName, onPlay, onLB, up, setUp }: any) {
+  const upgrade = (k: "dmg" | "fire" | "shield") => {
+    const cost = up[k] * 50;
+    if (up.credits < cost) return;
+    setUp({ ...up, [k]: up[k] + 1, credits: up.credits - cost });
+  };
+  return (
+    <div className="relative z-10 mx-auto flex h-full max-w-md flex-col items-center justify-center gap-6 px-6 text-center">
+      <div className="inline-flex items-center gap-2 rounded-full glass px-4 py-1.5 text-[10px] uppercase tracking-[0.3em] text-accent">
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" /> v2.4 RIFT · Online
+      </div>
+      <h1 className="font-display text-5xl font-black leading-none sm:text-6xl">
+        NEBULAR<br /><span className="text-gradient">ECHO</span>
+      </h1>
+      <p className="text-sm text-muted-foreground">
+        Pilot your starfighter through endless waves of the Hollow Sovereignty.
+        Collect credits, forge upgrades, climb the leaderboard.
+      </p>
+      <input
+        value={name}
+        maxLength={10}
+        onChange={(e) => setName(e.target.value.toUpperCase())}
+        className="w-full rounded-full glass px-5 py-3 text-center font-mono tracking-widest outline-none focus:border-accent"
+        placeholder="CALLSIGN"
+      />
+      <button
+        onClick={onPlay}
+        className="w-full rounded-full bg-gradient-to-r from-fuchsia-500 to-cyan-400 px-8 py-4 font-display text-lg font-black tracking-widest text-background neon-glow transition-transform active:scale-95"
+      >▶ LAUNCH</button>
+
+      <div className="w-full glass rounded-2xl p-4 text-left">
+        <div className="mb-3 flex items-center justify-between text-xs uppercase tracking-widest">
+          <span className="text-accent">Forge · Upgrades</span>
+          <span className="font-mono text-foreground">{up.credits} ◈</span>
+        </div>
+        {(["dmg", "fire", "shield"] as const).map((k) => (
+          <button
+            key={k}
+            onClick={() => upgrade(k)}
+            disabled={up.credits < up[k] * 50}
+            className="mb-2 flex w-full items-center justify-between rounded-xl border border-border bg-secondary/40 px-4 py-2 text-sm transition-colors hover:border-accent disabled:opacity-50"
           >
-            Play Free
-          </a>
-        </div>
-      </header>
+            <span className="uppercase tracking-widest text-muted-foreground">
+              {k === "dmg" ? "Damage" : k === "fire" ? "Fire Rate" : "Shield"}
+            </span>
+            <span className="font-mono">Lv {up[k]} · {up[k] * 50}◈</span>
+          </button>
+        ))}
+      </div>
 
-      {/* HERO */}
-      <section id="top" className="relative min-h-screen overflow-hidden pt-24">
-        <div className="absolute inset-0">
-          <img
-            src={heroImg}
-            alt="Starship cruising through a neon nebula"
-            width={1920}
-            height={1280}
-            className="h-full w-full object-cover opacity-70"
-          />
-          <div className="absolute inset-0 bg-gradient-to-b from-background/40 via-background/20 to-background" />
-          <div className="absolute inset-0 grid-bg opacity-30" />
-        </div>
+      <button onClick={onLB} className="text-xs uppercase tracking-[0.3em] text-muted-foreground hover:text-accent">
+        ✦ Leaderboard
+      </button>
 
-        <div className="relative mx-auto flex max-w-7xl flex-col items-start gap-8 px-6 pt-12 pb-32 md:pt-24">
-          <div className="inline-flex items-center gap-2 rounded-full glass px-4 py-1.5 text-xs uppercase tracking-[0.3em] text-accent">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-accent" /> Season 2 · The Rift Awakens
-          </div>
-          <h1 className="font-display text-5xl font-black leading-[0.95] sm:text-7xl md:text-8xl">
-            PILOT THE
-            <br />
-            <span className="text-gradient">UNCHARTED</span>
-            <br />
-            VOID.
-          </h1>
-          <p className="max-w-xl text-lg text-muted-foreground">
-            A 3D space combat saga where every jump rewrites the galaxy. Forge weapons from
-            collapsed stars, command living factions and out-fly real commanders in real time.
-          </p>
-          <div className="flex flex-wrap gap-4">
-            <a
-              href="#play"
-              className="group relative overflow-hidden rounded-full bg-gradient-to-r from-fuchsia-500 to-cyan-400 px-8 py-4 font-bold text-background neon-glow transition-transform hover:scale-105"
-            >
-              <span className="relative z-10">▶ Launch Demo</span>
-            </a>
-            <a
-              href="#story"
-              className="rounded-full border border-border glass px-8 py-4 font-semibold transition-colors hover:border-accent"
-            >
-              Read the Saga
-            </a>
-          </div>
-
-          <dl className="mt-12 grid w-full max-w-2xl grid-cols-3 gap-6 border-t border-border pt-8">
-            {[
-              ["2.4M+", "Commanders"],
-              ["38", "Star Systems"],
-              ["120Hz", "Combat Tick"],
-            ].map(([v, l]) => (
-              <div key={l}>
-                <dt className="text-3xl font-display font-bold text-gradient">{v}</dt>
-                <dd className="mt-1 text-xs uppercase tracking-widest text-muted-foreground">{l}</dd>
-              </div>
-            ))}
-          </dl>
-        </div>
-      </section>
-
-      {/* STORY */}
-      <section id="story" className="relative py-32">
-        <div className="mx-auto max-w-7xl px-6">
-          <SectionHeader kicker="Chapter 01" title="A Galaxy in Echo" />
-          <div className="mt-16 grid gap-8 md:grid-cols-3">
-            {[
-              {
-                step: "01",
-                title: "The Collapse",
-                body: "When the Sovereign Engine ruptured, 14 inhabited worlds folded into a single nebula — and time itself began to loop.",
-              },
-              {
-                step: "02",
-                title: "The Echo Fleet",
-                body: "You inherit a cracked carrier and a crew of survivors. Each jump replays a fragment of the lost war.",
-              },
-              {
-                step: "03",
-                title: "Your Choice",
-                body: "Heal the rift, exploit it, or become it. 6 endings. 28 branching missions. Permanent galactic consequences.",
-              },
-            ].map((s) => (
-              <article key={s.step} className="glass relative overflow-hidden rounded-2xl p-8">
-                <div className="absolute -top-6 -right-4 font-display text-8xl font-black text-white/5">
-                  {s.step}
-                </div>
-                <h3 className="text-xl font-bold">{s.title}</h3>
-                <p className="mt-4 text-sm leading-relaxed text-muted-foreground">{s.body}</p>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* HEROES */}
-      <section id="heroes" className="relative py-32">
-        <div className="mx-auto max-w-7xl px-6">
-          <SectionHeader kicker="Crew Roster" title="Heroes of the Echo Fleet" />
-          <div className="mt-16 grid gap-8 md:grid-cols-3">
-            {characters.map((c) => (
-              <article key={c.name} className="group glass relative overflow-hidden rounded-2xl">
-                <div className="relative aspect-[3/4] overflow-hidden">
-                  <img
-                    src={c.img}
-                    alt={c.name}
-                    loading="lazy"
-                    className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent" />
-                  <div className="absolute left-4 top-4 rounded-full glass px-3 py-1 text-[10px] uppercase tracking-widest text-accent">
-                    {c.role}
-                  </div>
-                  <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-cyan-400 to-transparent opacity-0 group-hover:opacity-100 animate-scan" />
-                </div>
-                <div className="space-y-4 p-6">
-                  <h3 className="font-display text-2xl font-bold">{c.name}</h3>
-                  <p className="text-sm text-muted-foreground">{c.desc}</p>
-                  <div className="space-y-2 pt-2">
-                    {Object.entries(c.stats).map(([k, v]) => (
-                      <div key={k} className="flex items-center gap-3 text-xs">
-                        <span className="w-14 uppercase tracking-widest text-muted-foreground">{k}</span>
-                        <div className="relative h-1.5 flex-1 overflow-hidden rounded-full bg-secondary">
-                          <div
-                            className="absolute inset-y-0 left-0 bg-gradient-to-r from-fuchsia-500 to-cyan-400"
-                            style={{ width: `${v}%` }}
-                          />
-                        </div>
-                        <span className="w-8 text-right font-mono text-foreground">{v}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ARSENAL */}
-      <section id="arsenal" className="relative py-32">
-        <div className="mx-auto max-w-7xl px-6">
-          <SectionHeader kicker="Forge & Mods" title="Living Arsenal" />
-          <div className="mt-16 grid gap-10 md:grid-cols-2">
-            <div className="glass relative overflow-hidden rounded-2xl p-8">
-              <img
-                src={weapon1}
-                alt="Pulse Ion XR-7 plasma rifle"
-                loading="lazy"
-                className="aspect-[4/3] w-full rounded-xl object-cover"
-              />
-              <div className="mt-6 flex items-center justify-between">
-                <div>
-                  <p className="text-xs uppercase tracking-widest text-accent">Mythic · Tier VII</p>
-                  <h3 className="mt-1 font-display text-2xl font-bold">Pulse Ion XR-7</h3>
-                </div>
-                <span className="rounded-full neon-border px-4 py-2 font-mono text-sm">DMG 480</span>
-              </div>
-              <p className="mt-4 text-sm text-muted-foreground">
-                Forged inside a collapsing star. Beam-class. Pierces 3 hulls. Recharges from kinetic feedback —
-                so the more you get hit, the harder it fires back.
-              </p>
-            </div>
-            <ul className="space-y-4">
-              {weapons.map((w) => (
-                <li
-                  key={w.name}
-                  className="glass group flex items-center gap-5 rounded-2xl p-5 transition-all hover:translate-x-1 hover:border-accent"
-                >
-                  <div className={`h-14 w-14 shrink-0 rounded-xl bg-gradient-to-br ${w.color} neon-glow`} />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-accent">
-                      {w.tier} <span className="text-muted-foreground">· {w.fire}</span>
-                    </div>
-                    <h4 className="font-display text-lg font-bold">{w.name}</h4>
-                  </div>
-                  <span className="font-mono text-lg text-foreground">{w.dmg}</span>
-                </li>
-              ))}
-              <li className="rounded-2xl border border-dashed border-border p-5 text-center text-sm text-muted-foreground">
-                + 240 more weapons · forge your own with salvaged cores
-              </li>
-            </ul>
-          </div>
-        </div>
-      </section>
-
-      {/* UPDATES */}
-      <section id="updates" className="relative py-32">
-        <div className="mx-auto max-w-7xl px-6">
-          <SectionHeader kicker="Live Service" title="Roadmap Transmission" />
-          <ol className="relative mt-16 space-y-8 border-l border-border pl-8">
-            {updates.map((u) => (
-              <li key={u.v} className="relative">
-                <span className="absolute -left-[37px] top-2 flex h-4 w-4 items-center justify-center">
-                  <span className="absolute inset-0 animate-ping rounded-full bg-accent/40" />
-                  <span className="relative h-3 w-3 rounded-full bg-gradient-to-br from-fuchsia-500 to-cyan-400" />
-                </span>
-                <div className="glass rounded-2xl p-6">
-                  <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <span className="font-mono text-xs uppercase tracking-widest text-accent">{u.v}</span>
-                    <span className="text-xs text-muted-foreground">{u.date}</span>
-                  </div>
-                  <h3 className="mt-2 font-display text-xl font-bold">{u.title}</h3>
-                  <p className="mt-2 text-sm text-muted-foreground">{u.desc}</p>
-                </div>
-              </li>
-            ))}
-          </ol>
-        </div>
-      </section>
-
-      {/* REWARDS */}
-      <section id="rewards" className="relative py-32">
-        <div className="mx-auto max-w-7xl px-6">
-          <SectionHeader kicker="Echo Pass" title="Rewards that Outlive Seasons" />
-          <div className="mt-16 grid gap-6 md:grid-cols-4">
-            {[
-              { d: 1, name: "Cyan Hull Skin", rare: "Common" },
-              { d: 7, name: "Drone Companion: HEX", rare: "Rare" },
-              { d: 14, name: "Mythic Forge Core", rare: "Epic" },
-              { d: 30, name: "Carrier 'Echo-Prime'", rare: "Mythic" },
-            ].map((r) => (
-              <div
-                key={r.d}
-                className="glass group relative overflow-hidden rounded-2xl p-6 transition-transform hover:-translate-y-1"
-              >
-                <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-accent to-transparent" />
-                <p className="font-mono text-xs uppercase tracking-widest text-accent">Day {r.d}</p>
-                <div className="mt-6 aspect-square rounded-xl bg-gradient-to-br from-fuchsia-500/30 via-purple-500/20 to-cyan-400/30 grid place-items-center">
-                  <span className="font-display text-5xl font-black text-gradient">{r.d}</span>
-                </div>
-                <h4 className="mt-4 font-bold">{r.name}</h4>
-                <p className="text-xs text-muted-foreground">{r.rare}</p>
-              </div>
-            ))}
-          </div>
-          <p className="mt-8 text-center text-sm text-muted-foreground">
-            Every reward is account-bound and carries forward forever. No FOMO, no resets.
-          </p>
-        </div>
-      </section>
-
-      {/* LEADERBOARD */}
-      <section id="leaderboard" className="relative py-32">
-        <div className="mx-auto max-w-7xl px-6">
-          <SectionHeader kicker="Global Standings" title="The Cinder Tournament" />
-          <div className="mt-16 overflow-hidden rounded-2xl glass">
-            <div className="grid grid-cols-12 border-b border-border px-6 py-4 text-[10px] uppercase tracking-widest text-muted-foreground">
-              <span className="col-span-1">#</span>
-              <span className="col-span-4">Commander</span>
-              <span className="col-span-4">Fleet</span>
-              <span className="col-span-3 text-right">Score</span>
-            </div>
-            {leaderboard.map((p) => (
-              <div
-                key={p.rank}
-                className="grid grid-cols-12 items-center border-b border-border/50 px-6 py-4 text-sm transition-colors last:border-0 hover:bg-accent/5"
-              >
-                <span
-                  className={`col-span-1 font-display text-2xl font-black ${
-                    p.rank === 1
-                      ? "text-gradient"
-                      : p.rank <= 3
-                      ? "text-accent"
-                      : "text-muted-foreground"
-                  }`}
-                >
-                  {String(p.rank).padStart(2, "0")}
-                </span>
-                <span className="col-span-4 font-mono font-bold">{p.name}</span>
-                <span className="col-span-4 text-muted-foreground">{p.fleet}</span>
-                <span className="col-span-3 text-right font-mono text-foreground">
-                  {p.score.toLocaleString()}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* WHAT'S NEW */}
-      <section className="relative py-32">
-        <div className="mx-auto max-w-7xl px-6">
-          <SectionHeader kicker="Why it's different" title="Things no other space game does" />
-          <div className="mt-16 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {[
-              { t: "Time-Echo Combat", d: "Die in a fight? Replay the last 8 seconds as a ghost and assist your own past self." },
-              { t: "Voice-tagged Crew", d: "Heroes call out threats with spatial audio that actually matches your screen position." },
-              { t: "Faction Tides", d: "Planet ownership rebalances every 6 hours from the global leaderboard — sleep can cost a system." },
-              { t: "Forge from Salvage", d: "Strip enemy ships mid-battle and weld parts onto your weapons in the same run." },
-              { t: "Branching Saga", d: "28 missions, 6 endings, permanent galaxy state. Your saves matter forever." },
-              { t: "No Pay-to-Win", d: "All weapons drop in-game. Cosmetics only in the store. Forever." },
-            ].map((f) => (
-              <div key={f.t} className="glass rounded-2xl p-6 transition-transform hover:-translate-y-1">
-                <div className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-fuchsia-500 to-cyan-400 font-display font-black text-background">
-                  ✦
-                </div>
-                <h4 className="font-display text-lg font-bold">{f.t}</h4>
-                <p className="mt-2 text-sm text-muted-foreground">{f.d}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* CTA */}
-      <section id="play" className="relative py-32">
-        <div className="mx-auto max-w-5xl px-6">
-          <div className="glass neon-border relative overflow-hidden rounded-3xl p-12 text-center md:p-20">
-            <div className="absolute -top-32 left-1/2 h-64 w-64 -translate-x-1/2 rounded-full bg-fuchsia-500/30 animate-pulse-glow" />
-            <p className="text-xs uppercase tracking-[0.4em] text-accent">Free to play · Steam · PS5 · Xbox</p>
-            <h2 className="mt-4 font-display text-4xl font-black leading-tight md:text-6xl">
-              The void is <span className="text-gradient">listening.</span>
-              <br />Answer it.
-            </h2>
-            <div className="mt-10 flex flex-wrap justify-center gap-4">
-              <a
-                href="#"
-                className="rounded-full bg-gradient-to-r from-fuchsia-500 to-cyan-400 px-8 py-4 font-bold text-background neon-glow transition-transform hover:scale-105"
-              >
-                ▶ Launch Demo
-              </a>
-              <a
-                href="#"
-                className="rounded-full border border-border glass px-8 py-4 font-semibold transition-colors hover:border-accent"
-              >
-                Watch Trailer
-              </a>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <footer className="relative border-t border-border py-10">
-        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-6 text-xs text-muted-foreground md:flex-row">
-          <p className="font-display tracking-widest">NEBULAR ECHO © 2026 — Echo Fleet Studios</p>
-          <div className="flex gap-6">
-            <a href="#" className="hover:text-foreground">Discord</a>
-            <a href="#" className="hover:text-foreground">Press Kit</a>
-            <a href="#" className="hover:text-foreground">Privacy</a>
-          </div>
-        </div>
-      </footer>
+      <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+        Desktop: WASD/Arrows · Space to fire · Mobile: drag to fly, auto-fire
+      </p>
     </div>
   );
 }
 
-function SectionHeader({ kicker, title }: { kicker: string; title: string }) {
+function Leaderboard({ lb, onBack }: any) {
   return (
-    <div className="flex flex-col items-start gap-3">
-      <span className="inline-flex items-center gap-2 rounded-full glass px-4 py-1.5 text-[10px] uppercase tracking-[0.3em] text-accent">
-        <span className="h-1.5 w-1.5 rounded-full bg-accent" /> {kicker}
-      </span>
-      <h2 className="font-display text-4xl font-black leading-tight md:text-6xl">
-        {title.split(" ").map((w, i, arr) => (
-          <span key={i} className={i === arr.length - 1 ? "text-gradient" : ""}>
-            {w}{i < arr.length - 1 ? " " : ""}
-          </span>
+    <div className="relative z-10 mx-auto flex h-full max-w-md flex-col gap-4 px-6 py-12">
+      <h2 className="font-display text-3xl font-black">CINDER <span className="text-gradient">TOURNAMENT</span></h2>
+      <div className="glass flex-1 overflow-y-auto rounded-2xl p-4">
+        {lb.length === 0 && <p className="py-12 text-center text-sm text-muted-foreground">No runs yet. Be the first.</p>}
+        {lb.map((p: any, i: number) => (
+          <div key={i} className="flex items-center justify-between border-b border-border/40 py-3 text-sm last:border-0">
+            <span className={`font-display text-xl font-black ${i === 0 ? "text-gradient" : i < 3 ? "text-accent" : "text-muted-foreground"}`}>
+              {String(i + 1).padStart(2, "0")}
+            </span>
+            <span className="flex-1 px-3 font-mono">{p.name}</span>
+            <span className="text-xs text-muted-foreground">W{p.wave}</span>
+            <span className="ml-3 font-mono">{p.score.toLocaleString()}</span>
+          </div>
         ))}
-      </h2>
+      </div>
+      <button onClick={onBack} className="rounded-full glass px-6 py-3 font-bold">← Back</button>
+    </div>
+  );
+}
+
+function GameOver({ hud, onRetry, onMenu }: any) {
+  return (
+    <div className="relative z-10 mx-auto flex h-full max-w-md flex-col items-center justify-center gap-6 px-6 text-center">
+      <p className="text-xs uppercase tracking-[0.4em] text-accent">Signal Lost</p>
+      <h2 className="font-display text-5xl font-black">YOU <span className="text-gradient">FELL</span></h2>
+      <div className="glass grid w-full grid-cols-3 gap-4 rounded-2xl p-6 text-center">
+        <Stat label="Score" v={hud.score.toLocaleString()} />
+        <Stat label="Wave" v={hud.wave} />
+        <Stat label="Credits" v={`+${hud.credits}◈`} />
+      </div>
+      <button onClick={onRetry} className="w-full rounded-full bg-gradient-to-r from-fuchsia-500 to-cyan-400 px-8 py-4 font-display font-black tracking-widest text-background neon-glow active:scale-95">
+        ↻ RE-LAUNCH
+      </button>
+      <button onClick={onMenu} className="text-xs uppercase tracking-[0.3em] text-muted-foreground hover:text-accent">
+        Return to Hangar
+      </button>
+    </div>
+  );
+}
+
+function Stat({ label, v }: { label: string; v: any }) {
+  return (
+    <div>
+      <div className="font-display text-2xl font-black text-gradient">{v}</div>
+      <div className="mt-1 text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
+    </div>
+  );
+}
+
+function Game({ upgrades, onHud, onEnd, onQuit, hud }: any) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const stateRef = useRef<any>(null);
+  const [localHud, setLocalHud] = useState({ score: 0, wave: 1, hp: 100, credits: 0 });
+
+  useEffect(() => {
+    const canvas = canvasRef.current!;
+    const ctx = canvas.getContext("2d")!;
+    let W = 0, H = 0;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+    const resize = () => {
+      W = canvas.clientWidth; H = canvas.clientHeight;
+      canvas.width = W * dpr; canvas.height = H * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+    resize();
+    window.addEventListener("resize", resize);
+
+    const keys: Record<string, boolean> = {};
+    const onKey = (e: KeyboardEvent, down: boolean) => {
+      keys[e.key.toLowerCase()] = down;
+      if (e.key === " ") e.preventDefault();
+    };
+    const kd = (e: KeyboardEvent) => onKey(e, true);
+    const ku = (e: KeyboardEvent) => onKey(e, false);
+    window.addEventListener("keydown", kd);
+    window.addEventListener("keyup", ku);
+
+    // touch
+    let touchTarget: { x: number; y: number } | null = null;
+    const tStart = (e: TouchEvent) => { e.preventDefault(); const t = e.touches[0]; const r = canvas.getBoundingClientRect(); touchTarget = { x: t.clientX - r.left, y: t.clientY - r.top }; };
+    const tMove = (e: TouchEvent) => { e.preventDefault(); const t = e.touches[0]; const r = canvas.getBoundingClientRect(); touchTarget = { x: t.clientX - r.left, y: t.clientY - r.top }; };
+    const tEnd = (e: TouchEvent) => { e.preventDefault(); touchTarget = null; };
+    canvas.addEventListener("touchstart", tStart, { passive: false });
+    canvas.addEventListener("touchmove", tMove, { passive: false });
+    canvas.addEventListener("touchend", tEnd, { passive: false });
+
+    // stars (pseudo-3D)
+    const stars: Star[] = Array.from({ length: 140 }, () => ({
+      x: Math.random() * 2 - 1, y: Math.random() * 2 - 1, z: Math.random(),
+    }));
+
+    const ship = { x: W / 2, y: H - 100, r: 14, hp: 100 * upgrades.shield, maxHp: 100 * upgrades.shield, cool: 0, inv: 0 };
+    const bullets: Entity[] = [];
+    const enemies: Entity[] = [];
+    const ebullets: Entity[] = [];
+    const particles: Entity[] = [];
+    const powerups: Entity[] = [];
+
+    let score = 0, wave = 1, credits = 0, spawnT = 0, enemiesToSpawn = 6, waveBreak = 0;
+    let last = performance.now();
+    let raf = 0;
+    let running = true;
+
+    const spawnExplosion = (x: number, y: number, color: string, n = 18) => {
+      for (let i = 0; i < n; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const s = 1 + Math.random() * 4;
+        particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, r: 1 + Math.random() * 2, t: 1, type: color });
+      }
+    };
+
+    const spawnEnemy = () => {
+      const r = Math.random();
+      const type = r < 0.7 ? "grunt" : r < 0.92 ? "fast" : "tank";
+      const radius = type === "tank" ? 26 : type === "fast" ? 12 : 18;
+      const hp = (type === "tank" ? 6 : type === "fast" ? 1 : 2) * Math.ceil(wave / 2);
+      const vy = type === "fast" ? 2.5 : type === "tank" ? 0.7 : 1.4;
+      enemies.push({ x: 40 + Math.random() * (W - 80), y: -30, vx: (Math.random() - 0.5) * 0.6, vy, r: radius, hp, type, t: 0 });
+    };
+
+    const update = (dt: number) => {
+      // input
+      let dx = 0, dy = 0;
+      if (keys["a"] || keys["arrowleft"]) dx -= 1;
+      if (keys["d"] || keys["arrowright"]) dx += 1;
+      if (keys["w"] || keys["arrowup"]) dy -= 1;
+      if (keys["s"] || keys["arrowdown"]) dy += 1;
+      const speed = 6;
+      if (touchTarget) {
+        const tx = touchTarget.x - ship.x;
+        const ty = touchTarget.y - 80 - ship.y;
+        const d = Math.hypot(tx, ty);
+        if (d > 2) { ship.x += (tx / d) * Math.min(speed, d); ship.y += (ty / d) * Math.min(speed, d); }
+      } else {
+        const m = Math.hypot(dx, dy) || 1;
+        ship.x += (dx / m) * speed; ship.y += (dy / m) * speed;
+      }
+      ship.x = Math.max(ship.r, Math.min(W - ship.r, ship.x));
+      ship.y = Math.max(ship.r, Math.min(H - ship.r, ship.y));
+
+      // fire
+      ship.cool -= dt;
+      const wantFire = keys[" "] || keys["space"] || touchTarget !== null;
+      if ((wantFire || true) && ship.cool <= 0) {
+        const fireDelay = 220 / upgrades.fire;
+        ship.cool = fireDelay;
+        bullets.push({ x: ship.x - 8, y: ship.y - 10, vx: 0, vy: -12, r: 3 });
+        bullets.push({ x: ship.x + 8, y: ship.y - 10, vx: 0, vy: -12, r: 3 });
+        if (upgrades.fire >= 3) bullets.push({ x: ship.x, y: ship.y - 14, vx: 0, vy: -14, r: 4 });
+      }
+
+      // stars
+      for (const s of stars) {
+        s.z -= 0.005;
+        if (s.z <= 0) { s.x = Math.random() * 2 - 1; s.y = Math.random() * 2 - 1; s.z = 1; }
+      }
+
+      // bullets
+      for (let i = bullets.length - 1; i >= 0; i--) {
+        const b = bullets[i]; b.y += b.vy; if (b.y < -10) bullets.splice(i, 1);
+      }
+      // ebullets
+      for (let i = ebullets.length - 1; i >= 0; i--) {
+        const b = ebullets[i]; b.x += b.vx; b.y += b.vy;
+        if (b.y > H + 10 || b.x < -10 || b.x > W + 10) ebullets.splice(i, 1);
+      }
+      // enemies
+      for (let i = enemies.length - 1; i >= 0; i--) {
+        const e = enemies[i]; e.t = (e.t || 0) + dt;
+        e.x += e.vx; e.y += e.vy;
+        if (e.x < e.r || e.x > W - e.r) e.vx *= -1;
+        // fire
+        if (e.type !== "fast" && Math.random() < 0.004 * wave) {
+          const ang = Math.atan2(ship.y - e.y, ship.x - e.x);
+          ebullets.push({ x: e.x, y: e.y, vx: Math.cos(ang) * 4, vy: Math.sin(ang) * 4, r: 4 });
+        }
+        if (e.y > H + 40) enemies.splice(i, 1);
+      }
+      // particles
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vx *= 0.96; p.vy *= 0.96; p.t! -= 0.02;
+        if (p.t! <= 0) particles.splice(i, 1);
+      }
+      // powerups
+      for (let i = powerups.length - 1; i >= 0; i--) {
+        const p = powerups[i]; p.y += p.vy;
+        if (Math.hypot(p.x - ship.x, p.y - ship.y) < ship.r + p.r) {
+          if (p.type === "heal") ship.hp = Math.min(ship.maxHp, ship.hp + 30);
+          else if (p.type === "credit") credits += 25;
+          powerups.splice(i, 1);
+          spawnExplosion(p.x, p.y, p.type === "heal" ? "#22d3ee" : "#f0abfc", 8);
+        } else if (p.y > H + 20) powerups.splice(i, 1);
+      }
+
+      // collisions: bullets x enemies
+      for (let i = enemies.length - 1; i >= 0; i--) {
+        const e = enemies[i];
+        for (let j = bullets.length - 1; j >= 0; j--) {
+          const b = bullets[j];
+          if (Math.hypot(e.x - b.x, e.y - b.y) < e.r + b.r) {
+            bullets.splice(j, 1);
+            e.hp! -= 1 * upgrades.dmg;
+            spawnExplosion(b.x, b.y, "#22d3ee", 4);
+            if (e.hp! <= 0) {
+              spawnExplosion(e.x, e.y, e.type === "tank" ? "#f0abfc" : "#a855f7", 22);
+              const reward = e.type === "tank" ? 200 : e.type === "fast" ? 80 : 100;
+              score += reward;
+              if (Math.random() < 0.15) powerups.push({ x: e.x, y: e.y, vx: 0, vy: 1.5, r: 10, type: Math.random() < 0.5 ? "heal" : "credit" });
+              enemies.splice(i, 1);
+              break;
+            }
+          }
+        }
+      }
+      // ebullets x ship
+      if (ship.inv > 0) ship.inv -= dt;
+      for (let i = ebullets.length - 1; i >= 0; i--) {
+        const b = ebullets[i];
+        if (Math.hypot(b.x - ship.x, b.y - ship.y) < ship.r + b.r) {
+          ebullets.splice(i, 1);
+          if (ship.inv <= 0) { ship.hp -= 12; ship.inv = 300; spawnExplosion(ship.x, ship.y, "#fb7185", 10); }
+        }
+      }
+      // ram
+      for (let i = enemies.length - 1; i >= 0; i--) {
+        const e = enemies[i];
+        if (Math.hypot(e.x - ship.x, e.y - ship.y) < e.r + ship.r) {
+          enemies.splice(i, 1); spawnExplosion(e.x, e.y, "#f0abfc", 20);
+          if (ship.inv <= 0) { ship.hp -= 20; ship.inv = 400; }
+        }
+      }
+
+      // spawn
+      spawnT -= dt;
+      if (enemiesToSpawn > 0 && spawnT <= 0) {
+        spawnEnemy(); enemiesToSpawn--; spawnT = Math.max(180, 700 - wave * 30);
+      } else if (enemiesToSpawn === 0 && enemies.length === 0) {
+        waveBreak -= dt;
+        if (waveBreak <= 0) {
+          wave++; enemiesToSpawn = 5 + wave * 2; waveBreak = 1500;
+          credits += 50; score += 250;
+        }
+      }
+
+      if (ship.hp <= 0) {
+        running = false;
+        cancelAnimationFrame(raf);
+        spawnExplosion(ship.x, ship.y, "#f0abfc", 60);
+        setTimeout(() => onEnd(Math.floor(score), wave, credits), 300);
+      }
+
+      // push hud (lightweight)
+      stateRef.current = { score, wave, hp: ship.hp, maxHp: ship.maxHp, credits };
+    };
+
+    const render = () => {
+      ctx.fillStyle = "rgba(10, 4, 28, 0.35)";
+      ctx.fillRect(0, 0, W, H);
+
+      // stars
+      for (const s of stars) {
+        const sx = (s.x / s.z) * (W / 2) + W / 2;
+        const sy = (s.y / s.z) * (H / 2) + H / 2;
+        const size = (1 - s.z) * 2.5;
+        ctx.fillStyle = `rgba(180,220,255,${1 - s.z})`;
+        ctx.fillRect(sx, sy, size, size);
+      }
+
+      // particles
+      for (const p of particles) {
+        ctx.fillStyle = p.type as string;
+        ctx.globalAlpha = Math.max(0, p.t!);
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+
+      // bullets
+      for (const b of bullets) {
+        const g = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, 12);
+        g.addColorStop(0, "rgba(34,211,238,1)");
+        g.addColorStop(1, "rgba(34,211,238,0)");
+        ctx.fillStyle = g; ctx.fillRect(b.x - 12, b.y - 12, 24, 24);
+        ctx.fillStyle = "#e6fbff"; ctx.fillRect(b.x - 1.5, b.y - 6, 3, 12);
+      }
+      // ebullets
+      for (const b of ebullets) {
+        const g = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, 14);
+        g.addColorStop(0, "rgba(240,171,252,1)");
+        g.addColorStop(1, "rgba(240,171,252,0)");
+        ctx.fillStyle = g; ctx.fillRect(b.x - 14, b.y - 14, 28, 28);
+      }
+
+      // enemies
+      for (const e of enemies) {
+        const col = e.type === "tank" ? "#f0abfc" : e.type === "fast" ? "#a855f7" : "#7c3aed";
+        ctx.save();
+        ctx.translate(e.x, e.y);
+        ctx.rotate(Math.sin((e.t || 0) / 200) * 0.2);
+        ctx.fillStyle = col;
+        ctx.shadowColor = col; ctx.shadowBlur = 20;
+        ctx.beginPath();
+        ctx.moveTo(0, e.r);
+        ctx.lineTo(-e.r, -e.r * 0.6);
+        ctx.lineTo(0, -e.r * 0.3);
+        ctx.lineTo(e.r, -e.r * 0.6);
+        ctx.closePath(); ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = "#22d3ee";
+        ctx.beginPath(); ctx.arc(0, -e.r * 0.3, e.r * 0.25, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      }
+
+      // powerups
+      for (const p of powerups) {
+        const col = p.type === "heal" ? "#22d3ee" : "#f0abfc";
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(performance.now() / 400);
+        ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.shadowColor = col; ctx.shadowBlur = 12;
+        ctx.strokeRect(-p.r, -p.r, p.r * 2, p.r * 2);
+        ctx.fillStyle = col; ctx.font = "bold 12px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillText(p.type === "heal" ? "+" : "◈", 0, 1);
+        ctx.restore();
+      }
+
+      // ship
+      ctx.save();
+      ctx.translate(ship.x, ship.y);
+      const blink = ship.inv > 0 && Math.floor(performance.now() / 60) % 2;
+      ctx.globalAlpha = blink ? 0.4 : 1;
+      // thruster
+      const flick = 0.7 + Math.random() * 0.3;
+      const tg = ctx.createLinearGradient(0, ship.r, 0, ship.r + 30 * flick);
+      tg.addColorStop(0, "rgba(34,211,238,1)"); tg.addColorStop(1, "rgba(124,58,237,0)");
+      ctx.fillStyle = tg;
+      ctx.beginPath(); ctx.moveTo(-6, ship.r); ctx.lineTo(6, ship.r); ctx.lineTo(0, ship.r + 30 * flick); ctx.closePath(); ctx.fill();
+      // body
+      ctx.fillStyle = "#22d3ee"; ctx.shadowColor = "#22d3ee"; ctx.shadowBlur = 20;
+      ctx.beginPath();
+      ctx.moveTo(0, -ship.r);
+      ctx.lineTo(ship.r, ship.r * 0.8);
+      ctx.lineTo(0, ship.r * 0.4);
+      ctx.lineTo(-ship.r, ship.r * 0.8);
+      ctx.closePath(); ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = "#f0abfc";
+      ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    };
+
+    const loop = (now: number) => {
+      const dt = Math.min(50, now - last); last = now;
+      if (running) update(dt);
+      render();
+      if (running) raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+
+    // hud sync
+    const hudInt = setInterval(() => {
+      if (stateRef.current) setLocalHud({ ...stateRef.current });
+    }, 100);
+
+    return () => {
+      running = false;
+      cancelAnimationFrame(raf);
+      clearInterval(hudInt);
+      window.removeEventListener("resize", resize);
+      window.removeEventListener("keydown", kd);
+      window.removeEventListener("keyup", ku);
+      canvas.removeEventListener("touchstart", tStart);
+      canvas.removeEventListener("touchmove", tMove);
+      canvas.removeEventListener("touchend", tEnd);
+    };
+  }, [upgrades, onEnd]);
+
+  const hpPct = Math.max(0, Math.min(100, (localHud.hp / (localHud.maxHp || 1)) * 100));
+
+  return (
+    <div className="relative h-full w-full">
+      <canvas ref={canvasRef} className="absolute inset-0 h-full w-full touch-none" />
+      {/* HUD */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between p-4">
+        <div className="glass pointer-events-auto rounded-2xl px-4 py-2">
+          <div className="flex items-center gap-3 text-xs">
+            <span className="text-muted-foreground">HULL</span>
+            <div className="h-2 w-28 overflow-hidden rounded-full bg-secondary">
+              <div className="h-full bg-gradient-to-r from-fuchsia-500 to-cyan-400 transition-all" style={{ width: `${hpPct}%` }} />
+            </div>
+          </div>
+          <div className="mt-1 flex gap-4 text-[10px] uppercase tracking-widest text-muted-foreground">
+            <span>Wave <span className="text-accent">{localHud.wave}</span></span>
+            <span>◈ <span className="text-foreground">{localHud.credits}</span></span>
+          </div>
+        </div>
+        <div className="glass pointer-events-auto rounded-2xl px-4 py-2 text-right">
+          <div className="font-display text-xl font-black text-gradient">{localHud.score.toLocaleString()}</div>
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Score</div>
+        </div>
+      </div>
+      <button onClick={onQuit} className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-full glass px-4 py-2 text-xs uppercase tracking-widest hover:text-accent">
+        Eject
+      </button>
     </div>
   );
 }
