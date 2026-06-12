@@ -260,10 +260,11 @@ function Stat({ label, v }: { label: string; v: any }) {
   );
 }
 
-function Game({ upgrades, onHud, onEnd, onQuit, hud }: any) {
+function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stateRef = useRef<any>(null);
-  const [localHud, setLocalHud] = useState({ score: 0, wave: 1, hp: 100, credits: 0 });
+  const actionsRef = useRef<{ shield: () => void; bomb: () => void } | null>(null);
+  const [localHud, setLocalHud] = useState<any>({ score: 0, wave: 1, hp: 100, maxHp: 100, credits: 0, shieldCD: 0, bombs: 1, boss: null });
 
   useEffect(() => {
     const canvas = canvasRef.current!;
