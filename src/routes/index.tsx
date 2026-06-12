@@ -673,22 +673,78 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
       // thruster
       const flick = 0.7 + Math.random() * 0.3;
       const tg = ctx.createLinearGradient(0, ship.r, 0, ship.r + 30 * flick);
-      tg.addColorStop(0, "rgba(34,211,238,1)"); tg.addColorStop(1, "rgba(124,58,237,0)");
+      tg.addColorStop(0, shipDef.color); tg.addColorStop(1, "rgba(124,58,237,0)");
       ctx.fillStyle = tg;
       ctx.beginPath(); ctx.moveTo(-6, ship.r); ctx.lineTo(6, ship.r); ctx.lineTo(0, ship.r + 30 * flick); ctx.closePath(); ctx.fill();
       // body
-      ctx.fillStyle = "#22d3ee"; ctx.shadowColor = "#22d3ee"; ctx.shadowBlur = 20;
+      ctx.fillStyle = shipDef.color; ctx.shadowColor = shipDef.color; ctx.shadowBlur = 20;
       ctx.beginPath();
-      ctx.moveTo(0, -ship.r);
-      ctx.lineTo(ship.r, ship.r * 0.8);
-      ctx.lineTo(0, ship.r * 0.4);
-      ctx.lineTo(-ship.r, ship.r * 0.8);
+      if (shipDef.id === "phantom") {
+        ctx.moveTo(0, -ship.r);
+        ctx.lineTo(ship.r, ship.r * 0.5);
+        ctx.lineTo(ship.r * 0.4, ship.r * 0.9);
+        ctx.lineTo(-ship.r * 0.4, ship.r * 0.9);
+        ctx.lineTo(-ship.r, ship.r * 0.5);
+      } else if (shipDef.id === "titan") {
+        ctx.moveTo(-ship.r * 0.5, -ship.r * 0.9);
+        ctx.lineTo(ship.r * 0.5, -ship.r * 0.9);
+        ctx.lineTo(ship.r, ship.r * 0.7);
+        ctx.lineTo(-ship.r, ship.r * 0.7);
+      } else {
+        ctx.moveTo(0, -ship.r);
+        ctx.lineTo(ship.r, ship.r * 0.8);
+        ctx.lineTo(0, ship.r * 0.4);
+        ctx.lineTo(-ship.r, ship.r * 0.8);
+      }
       ctx.closePath(); ctx.fill();
       ctx.shadowBlur = 0;
-      ctx.fillStyle = "#f0abfc";
+      ctx.fillStyle = shipDef.accent;
       ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI * 2); ctx.fill();
+      if (ship.shieldT > 0) {
+        ctx.strokeStyle = "rgba(34,211,238,0.85)"; ctx.lineWidth = 2;
+        ctx.shadowColor = "#22d3ee"; ctx.shadowBlur = 18;
+        ctx.beginPath();
+        ctx.arc(0, 0, ship.r + 10 + Math.sin(performance.now() / 100) * 2, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
       ctx.restore();
       ctx.globalAlpha = 1;
+
+      // ===== BOSS render =====
+      if (boss) {
+        ctx.save();
+        ctx.translate(boss.x, boss.y);
+        ctx.rotate(Math.sin(boss.t / 600) * 0.15);
+        ctx.shadowColor = boss.color; ctx.shadowBlur = 30;
+        ctx.fillStyle = boss.color;
+        ctx.beginPath();
+        for (let k = 0; k < 6; k++) {
+          const a = (k / 6) * Math.PI * 2;
+          const x = Math.cos(a) * boss.r, y = Math.sin(a) * boss.r;
+          if (k === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.closePath(); ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = boss.accent;
+        ctx.beginPath(); ctx.arc(0, 0, boss.r * 0.4, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "#0a0418";
+        ctx.beginPath(); ctx.arc(0, 0, boss.r * 0.22, 0, Math.PI * 2); ctx.fill();
+        for (let k = 0; k < 4; k++) {
+          const a = boss.t / 400 + (k * Math.PI) / 2;
+          ctx.fillStyle = boss.accent;
+          ctx.beginPath();
+          ctx.arc(Math.cos(a) * (boss.r + 14), Math.sin(a) * (boss.r + 14), 4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      // bomb flash
+      if (ship.bombCD > 700) {
+        ctx.fillStyle = `rgba(34,211,238,${(ship.bombCD - 700) / 200})`;
+        ctx.fillRect(0, 0, W, H);
+      }
     };
 
     const loop = (now: number) => {
