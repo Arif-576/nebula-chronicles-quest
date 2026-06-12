@@ -460,9 +460,72 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
         if (Math.hypot(p.x - ship.x, p.y - ship.y) < ship.r + p.r) {
           if (p.type === "heal") ship.hp = Math.min(ship.maxHp, ship.hp + 30);
           else if (p.type === "credit") credits += 25;
+          else if (p.type === "bomb") ship.bombs = Math.min(5, ship.bombs + 1);
           powerups.splice(i, 1);
-          spawnExplosion(p.x, p.y, p.type === "heal" ? "#22d3ee" : "#f0abfc", 8);
+          spawnExplosion(p.x, p.y, p.type === "heal" ? "#22d3ee" : p.type === "bomb" ? "#fbbf24" : "#f0abfc", 8);
         } else if (p.y > H + 20) powerups.splice(i, 1);
+      }
+
+      // ===== BOSS update =====
+      if (boss) {
+        boss.t += dt;
+        if (bossIntroT > 0) {
+          bossIntroT -= dt;
+          boss.y = Math.min(110, boss.y + 0.9);
+        } else {
+          boss.x += boss.vx;
+          if (boss.x < boss.r + 10 || boss.x > W - boss.r - 10) boss.vx *= -1;
+          boss.y = 110 + Math.sin(boss.t / 700) * 20;
+          boss.fireT -= dt;
+          boss.dashCD -= dt;
+          if (boss.fireT <= 0) {
+            boss.fireT = Math.max(380, 900 - wave * 15);
+            const ratio = boss.hp / boss.maxHp;
+            if (ratio < 0.4) {
+              const base = boss.t / 300;
+              for (let k = 0; k < 8; k++) {
+                const a = base + (k * Math.PI) / 4;
+                ebullets.push({ x: boss.x, y: boss.y, vx: Math.cos(a) * 3.2, vy: Math.sin(a) * 3.2, r: 5 });
+              }
+            } else if (ratio < 0.75) {
+              const ang = Math.atan2(ship.y - boss.y, ship.x - boss.x);
+              for (let k = -1; k <= 1; k++) {
+                const a = ang + k * 0.25;
+                ebullets.push({ x: boss.x, y: boss.y, vx: Math.cos(a) * 4.5, vy: Math.sin(a) * 4.5, r: 5 });
+              }
+            } else {
+              const ang = Math.atan2(ship.y - boss.y, ship.x - boss.x);
+              ebullets.push({ x: boss.x, y: boss.y, vx: Math.cos(ang) * 5, vy: Math.sin(ang) * 5, r: 6 });
+            }
+          }
+          if (boss.dashCD <= 0 && boss.hp / boss.maxHp < 0.5) {
+            boss.dashCD = 5000;
+            boss.vx = (ship.x > boss.x ? 1 : -1) * 6;
+          }
+        }
+        for (let j = bullets.length - 1; j >= 0; j--) {
+          const b = bullets[j];
+          if (Math.hypot(boss.x - b.x, boss.y - b.y) < boss.r + b.r) {
+            bullets.splice(j, 1);
+            const dmg = (b.type === "heavy" ? 3 : 1) * upgrades.dmg;
+            boss.hp -= dmg;
+            spawnExplosion(b.x, b.y, boss.accent, 4);
+          }
+        }
+        if (Math.hypot(boss.x - ship.x, boss.y - ship.y) < boss.r + ship.r) {
+          if (ship.shieldT <= 0 && ship.inv <= 0) { ship.hp -= 30; ship.inv = 500; spawnExplosion(ship.x, ship.y, boss.color, 16); }
+        }
+        if (boss.hp <= 0) {
+          spawnExplosion(boss.x, boss.y, boss.color, 80);
+          spawnExplosion(boss.x, boss.y, boss.accent, 60);
+          score += 2000 + wave * 100;
+          credits += 200;
+          ship.bombs = Math.min(5, ship.bombs + 2);
+          for (let k = 0; k < 3; k++) powerups.push({ x: boss.x + (k - 1) * 30, y: boss.y, vx: 0, vy: 1.5, r: 11, type: k === 0 ? "heal" : k === 1 ? "credit" : "bomb" });
+          boss = null;
+          bossWave = false;
+          waveBreak = 2000;
+        }
       }
 
       // collisions: bullets x enemies
