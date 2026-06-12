@@ -771,9 +771,11 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
       canvas.removeEventListener("touchmove", tMove);
       canvas.removeEventListener("touchend", tEnd);
     };
-  }, [upgrades, onEnd]);
+  }, [upgrades, onEnd, shipDef]);
 
   const hpPct = Math.max(0, Math.min(100, (localHud.hp / (localHud.maxHp || 1)) * 100));
+  const bossPct = localHud.boss ? Math.max(0, (localHud.boss.hp / localHud.boss.maxHp) * 100) : 0;
+  const shieldReady = (localHud.shieldCD ?? 0) <= 0;
 
   return (
     <div className="relative h-full w-full">
@@ -800,6 +802,45 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
       <button onClick={onQuit} className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-full glass px-4 py-2 text-xs uppercase tracking-widest hover:text-accent">
         Eject
       </button>
+
+      {localHud.boss && (
+        <div className="pointer-events-none absolute inset-x-0 top-20 z-10 mx-auto max-w-md px-4">
+          <div className="glass rounded-xl p-2">
+            <div className="flex items-center justify-between px-1 text-[10px] uppercase tracking-[0.3em]" style={{ color: localHud.boss.color }}>
+              <span>⚠ {localHud.boss.name}</span>
+              <span className="text-muted-foreground">SOVEREIGN</span>
+            </div>
+            <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-secondary">
+              <div className="h-full transition-all" style={{ width: `${bossPct}%`, background: `linear-gradient(90deg, ${localHud.boss.color}, #f0abfc)` }} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="absolute bottom-4 right-4 z-10 flex flex-col gap-2">
+        <button
+          onClick={() => actionsRef.current?.bomb()}
+          disabled={(localHud.bombs ?? 0) <= 0}
+          className="relative h-14 w-14 rounded-full border border-amber-300/40 bg-gradient-to-br from-amber-400/30 to-fuchsia-500/30 font-display text-xl text-foreground active:scale-95 disabled:opacity-40"
+          aria-label="Nova bomb"
+        >
+          ✸
+          <span className="absolute -bottom-1 -right-1 rounded-full bg-background/80 px-1.5 text-[10px] font-mono">{localHud.bombs ?? 0}</span>
+        </button>
+        <button
+          onClick={() => actionsRef.current?.shield()}
+          disabled={!shieldReady}
+          className="relative h-14 w-14 rounded-full border border-cyan-400/40 bg-gradient-to-br from-cyan-400/30 to-fuchsia-500/20 font-display text-xl text-foreground active:scale-95 disabled:opacity-40"
+          aria-label="Shield"
+        >
+          ◯
+          {!shieldReady && (
+            <span className="absolute inset-0 flex items-center justify-center text-[10px] font-mono text-cyan-300">
+              {Math.ceil((localHud.shieldCD ?? 0) / 1000)}s
+            </span>
+          )}
+        </button>
+      </div>
     </div>
   );
 }
