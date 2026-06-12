@@ -77,7 +77,7 @@ function GameApp() {
           name={name} setName={setName}
           onPlay={() => setScreen("play")}
           onLB={() => setScreen("leaderboard")}
-          up={up} setUp={(u) => { saveUp(u); setUp(u); }}
+          up={up} setUp={(u: ReturnType<typeof loadUp>) => { saveUp(u); setUp(u); }}
           shipId={shipId} setShipId={(id: ShipId) => { saveShip(id); setShipId(id); }}
         />
       )}
