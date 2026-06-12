@@ -554,7 +554,8 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
         const b = ebullets[i];
         if (Math.hypot(b.x - ship.x, b.y - ship.y) < ship.r + b.r) {
           ebullets.splice(i, 1);
-          if (ship.inv <= 0) { ship.hp -= 12; ship.inv = 300; spawnExplosion(ship.x, ship.y, "#fb7185", 10); }
+          if (ship.shieldT > 0) { spawnExplosion(b.x, b.y, "#22d3ee", 6); }
+          else if (ship.inv <= 0) { ship.hp -= 12; ship.inv = 300; spawnExplosion(ship.x, ship.y, "#fb7185", 10); }
         }
       }
       // ram
@@ -562,19 +563,20 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
         const e = enemies[i];
         if (Math.hypot(e.x - ship.x, e.y - ship.y) < e.r + ship.r) {
           enemies.splice(i, 1); spawnExplosion(e.x, e.y, "#f0abfc", 20);
-          if (ship.inv <= 0) { ship.hp -= 20; ship.inv = 400; }
+          if (ship.shieldT <= 0 && ship.inv <= 0) { ship.hp -= 20; ship.inv = 400; }
         }
       }
 
       // spawn
       spawnT -= dt;
-      if (enemiesToSpawn > 0 && spawnT <= 0) {
+      if (!boss && !bossWave && enemiesToSpawn > 0 && spawnT <= 0) {
         spawnEnemy(); enemiesToSpawn--; spawnT = Math.max(180, 700 - wave * 30);
-      } else if (enemiesToSpawn === 0 && enemies.length === 0) {
+      } else if (!boss && enemiesToSpawn === 0 && enemies.length === 0) {
         waveBreak -= dt;
         if (waveBreak <= 0) {
           wave++; enemiesToSpawn = 5 + wave * 2; waveBreak = 1500;
           credits += 50; score += 250;
+          if (wave % 5 === 0) { bossWave = true; spawnBoss(); }
         }
       }
 
@@ -586,7 +588,11 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
       }
 
       // push hud (lightweight)
-      stateRef.current = { score, wave, hp: ship.hp, maxHp: ship.maxHp, credits };
+      stateRef.current = {
+        score, wave, hp: ship.hp, maxHp: ship.maxHp, credits,
+        shieldT: ship.shieldT, shieldCD: ship.shieldCD, bombs: ship.bombs,
+        boss: boss ? { name: boss.name, hp: boss.hp, maxHp: boss.maxHp, color: boss.color } : null,
+      };
     };
 
     const render = () => {
