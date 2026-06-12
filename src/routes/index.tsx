@@ -405,8 +405,9 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
     };
     const shieldBurst = () => {
       if (ship.shieldCD > 0) return;
-      ship.shieldT = 2200; ship.shieldCD = 9000;
-      spawnExplosion(ship.x, ship.y, "#22d3ee", 30);
+      ship.shieldT = 4200 + upgrades.shield * 200;
+      ship.shieldCD = 9000;
+      spawnExplosion(ship.x, ship.y, "#22d3ee", 36);
     };
     actionsRef.current = { shield: shieldBurst, bomb: novaBomb };
 
@@ -443,6 +444,13 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
           bullets.push({ x: ship.x, y: ship.y - 14, vx: 0, vy: -14, r: bSize + 1, type: "p" });
         if (shipDef.id === "titan")
           bullets.push({ x: ship.x, y: ship.y - 14, vx: 0, vy: -10, r: 7, type: "heavy" });
+        if (upgrades.fire >= 4) {
+          bullets.push({ x: ship.x - 14, y: ship.y - 6, vx: -2.4, vy: -11, r: bSize, type: "p" });
+          bullets.push({ x: ship.x + 14, y: ship.y - 6, vx: 2.4, vy: -11, r: bSize, type: "p" });
+        }
+        if (upgrades.fire >= 5) {
+          bullets.push({ x: ship.x, y: ship.y - 20, vx: 0, vy: -16, r: bSize + 2, type: "heavy" });
+        }
       }
 
       // shield/bomb cooldowns + key triggers
