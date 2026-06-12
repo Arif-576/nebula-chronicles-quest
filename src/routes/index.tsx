@@ -342,6 +342,44 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
       enemies.push({ x: 40 + Math.random() * (W - 80), y: -30, vx: (Math.random() - 0.5) * 0.6, vy, r: radius, hp, type, t: 0 });
     };
 
+    const BOSSES = [
+      { name: "VOID HERALD",    color: "#f0abfc", accent: "#22d3ee" },
+      { name: "CRIMSON MAW",    color: "#fb7185", accent: "#fbbf24" },
+      { name: "ECHO LEVIATHAN", color: "#a855f7", accent: "#a3e635" },
+      { name: "NULL SOVEREIGN", color: "#22d3ee", accent: "#f0abfc" },
+    ];
+    const spawnBoss = () => {
+      const idx = Math.max(0, Math.floor(wave / 5 - 1)) % BOSSES.length;
+      const def = BOSSES[idx];
+      const hp = 220 + wave * 55;
+      boss = {
+        x: W / 2, y: -80, vx: 2.2 + wave * 0.1, r: 46, hp, maxHp: hp,
+        t: 0, fireT: 600, name: def.name, color: def.color, accent: def.accent, dashCD: 4000,
+      };
+      bossIntroT = 1200;
+    };
+
+    const novaBomb = () => {
+      if (ship.bombs <= 0 || ship.bombCD > 0) return;
+      ship.bombs--; ship.bombCD = 900;
+      spawnExplosion(ship.x, ship.y, "#22d3ee", 60);
+      spawnExplosion(ship.x, ship.y, "#f0abfc", 40);
+      ebullets.length = 0;
+      for (let i = enemies.length - 1; i >= 0; i--) {
+        const e = enemies[i];
+        e.hp! -= 8 * upgrades.dmg;
+        spawnExplosion(e.x, e.y, "#f0abfc", 14);
+        if (e.hp! <= 0) { score += 80; enemies.splice(i, 1); }
+      }
+      if (boss) { boss.hp -= 60 * upgrades.dmg; spawnExplosion(boss.x, boss.y, "#22d3ee", 40); }
+    };
+    const shieldBurst = () => {
+      if (ship.shieldCD > 0) return;
+      ship.shieldT = 2200; ship.shieldCD = 9000;
+      spawnExplosion(ship.x, ship.y, "#22d3ee", 30);
+    };
+    actionsRef.current = { shield: shieldBurst, bomb: novaBomb };
+
     const update = (dt: number) => {
       // input
       let dx = 0, dy = 0;
