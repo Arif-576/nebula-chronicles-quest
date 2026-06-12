@@ -860,12 +860,19 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
         <button
           onClick={() => actionsRef.current?.shield()}
           disabled={!shieldReady}
-          className="relative h-14 w-14 rounded-full border border-cyan-400/40 bg-gradient-to-br from-cyan-400/30 to-fuchsia-500/20 font-display text-xl text-foreground active:scale-95 disabled:opacity-40"
-          aria-label="Shield"
+          className="group relative h-16 w-16 rounded-full border-2 border-cyan-300/70 bg-gradient-to-br from-cyan-400/40 via-sky-500/30 to-fuchsia-500/30 text-foreground shadow-[0_0_24px_rgba(34,211,238,0.55)] transition-transform active:scale-95 disabled:opacity-40 disabled:shadow-none"
+          aria-label="Shield burst"
         >
-          ◯
+          {shieldReady && (
+            <span className="pointer-events-none absolute inset-0 rounded-full border-2 border-cyan-300/60 animate-ping" />
+          )}
+          <span className="pointer-events-none absolute inset-1.5 rounded-full border border-cyan-200/40" />
+          <svg viewBox="0 0 24 24" className="relative mx-auto h-7 w-7 drop-shadow-[0_0_6px_rgba(34,211,238,0.9)]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5l8-3z" />
+            <path d="M9 12l2 2 4-4" />
+          </svg>
           {!shieldReady && (
-            <span className="absolute inset-0 flex items-center justify-center text-[10px] font-mono text-cyan-300">
+            <span className="absolute inset-0 flex items-center justify-center rounded-full bg-background/60 text-[11px] font-mono font-bold text-cyan-200">
               {Math.ceil((localHud.shieldCD ?? 0) / 1000)}s
             </span>
           )}
