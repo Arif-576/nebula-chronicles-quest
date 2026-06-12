@@ -17,7 +17,22 @@ interface Entity { x: number; y: number; vx: number; vy: number; r: number; hp?:
 interface Star { x: number; y: number; z: number; }
 
 const LB_KEY = "nebular_echo_lb_v1";
-const UP_KEY = "nebular_echo_up_v1";
+const UP_KEY = "nebular_echo_up_v2";
+const SHIP_KEY = "nebular_echo_ship_v1";
+
+type ShipId = "vanguard" | "phantom" | "titan";
+interface ShipDef { id: ShipId; name: string; tag: string; speed: number; hpMul: number; fireMul: number; dmgMul: number; color: string; accent: string; desc: string; }
+const SHIPS: ShipDef[] = [
+  { id: "vanguard", name: "VANGUARD", tag: "Balanced", speed: 6, hpMul: 1, fireMul: 1, dmgMul: 1, color: "#22d3ee", accent: "#f0abfc", desc: "All-round starfighter. Reliable in any tide." },
+  { id: "phantom",  name: "PHANTOM",  tag: "Glass Cannon", speed: 7.6, hpMul: 0.7, fireMul: 1.35, dmgMul: 1.15, color: "#f0abfc", accent: "#22d3ee", desc: "Fragile hull, blistering fire rate, surgical damage." },
+  { id: "titan",    name: "TITAN",    tag: "Bulwark",     speed: 4.6, hpMul: 1.7, fireMul: 0.85, dmgMul: 1.35, color: "#a3e635", accent: "#f59e0b", desc: "Heavy plating, slower frame, devastating shots." },
+];
+function loadShip(): ShipId {
+  if (typeof window === "undefined") return "vanguard";
+  const v = localStorage.getItem(SHIP_KEY) as ShipId | null;
+  return v && SHIPS.find(s => s.id === v) ? v : "vanguard";
+}
+function saveShip(id: ShipId) { localStorage.setItem(SHIP_KEY, id); }
 
 function loadLB(): { name: string; score: number; wave: number }[] {
   if (typeof window === "undefined") return [];
@@ -42,6 +57,7 @@ function GameApp() {
   const [hud, setHud] = useState({ score: 0, wave: 1, hp: 100, credits: 0 });
   const [lb, setLb] = useState<ReturnType<typeof loadLB>>([]);
   const [up, setUp] = useState(loadUp());
+  const [shipId, setShipId] = useState<ShipId>(loadShip());
 
   useEffect(() => { setLb(loadLB()); }, [screen]);
 
@@ -62,10 +78,11 @@ function GameApp() {
           onPlay={() => setScreen("play")}
           onLB={() => setScreen("leaderboard")}
           up={up} setUp={(u) => { saveUp(u); setUp(u); }}
+          shipId={shipId} setShipId={(id: ShipId) => { saveShip(id); setShipId(id); }}
         />
       )}
       {screen === "play" && (
-        <Game upgrades={up} onHud={setHud} onEnd={onGameOver} onQuit={() => setScreen("menu")} hud={hud} />
+        <Game upgrades={up} ship={SHIPS.find(s => s.id === shipId)!} onHud={setHud} onEnd={onGameOver} onQuit={() => setScreen("menu")} hud={hud} />
       )}
       {screen === "gameover" && (
         <GameOver hud={hud} onRetry={() => setScreen("play")} onMenu={() => setScreen("menu")} />
