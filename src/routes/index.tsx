@@ -1,5 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState, useCallback } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { AuthScreen } from "@/components/AuthScreen";
+import { Logo } from "@/components/Logo";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -58,6 +61,23 @@ function GameApp() {
   const [lb, setLb] = useState<ReturnType<typeof loadLB>>([]);
   const [up, setUp] = useState(loadUp());
   const [shipId, setShipId] = useState<ShipId>(loadShip());
+  const [authed, setAuthed] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      setAuthed(!!session);
+      if (session?.user) {
+        supabase.from("profiles").select("username").eq("id", session.user.id).maybeSingle()
+          .then(({ data }) => {
+            const u = (data?.username ?? session.user.email?.split("@")[0] ?? "PILOT")
+              .toUpperCase().slice(0, 10);
+            setName(u);
+          });
+      }
+    });
+    supabase.auth.getSession().then(({ data }) => setAuthed(!!data.session));
+    return () => { sub.subscription.unsubscribe(); };
+  }, []);
 
   useEffect(() => { setLb(loadLB()); }, [screen]);
 
@@ -72,22 +92,26 @@ function GameApp() {
   return (
     <div className="relative h-[100dvh] w-full overflow-hidden bg-background text-foreground">
       <BackgroundFX />
-      {screen === "menu" && (
+      {authed === false && (
+        <AuthScreen onAuthed={(u) => { setName(u); setAuthed(true); }} />
+      )}
+      {authed && screen === "menu" && (
         <Menu
           name={name} setName={setName}
           onPlay={() => setScreen("play")}
           onLB={() => setScreen("leaderboard")}
           up={up} setUp={(u: ReturnType<typeof loadUp>) => { saveUp(u); setUp(u); }}
           shipId={shipId} setShipId={(id: ShipId) => { saveShip(id); setShipId(id); }}
+          onSignOut={async () => { await supabase.auth.signOut(); setAuthed(false); }}
         />
       )}
-      {screen === "play" && (
+      {authed && screen === "play" && (
         <Game upgrades={up} ship={SHIPS.find(s => s.id === shipId)!} onHud={setHud} onEnd={onGameOver} onQuit={() => setScreen("menu")} hud={hud} />
       )}
-      {screen === "gameover" && (
+      {authed && screen === "gameover" && (
         <GameOver hud={hud} onRetry={() => setScreen("play")} onMenu={() => setScreen("menu")} />
       )}
-      {screen === "leaderboard" && (
+      {authed && screen === "leaderboard" && (
         <Leaderboard lb={lb} onBack={() => setScreen("menu")} />
       )}
     </div>
@@ -102,7 +126,7 @@ function BackgroundFX() {
   );
 }
 
-function Menu({ name, setName, onPlay, onLB, up, setUp, shipId, setShipId }: any) {
+function Menu({ name, setName, onPlay, onLB, up, setUp, shipId, setShipId, onSignOut }: any) {
   const upgrade = (k: "dmg" | "fire" | "shield") => {
     const cost = up[k] * 50;
     if (up.credits < cost) return;
@@ -110,6 +134,7 @@ function Menu({ name, setName, onPlay, onLB, up, setUp, shipId, setShipId }: any
   };
   return (
     <div className="relative z-10 mx-auto flex h-full max-w-md flex-col items-center gap-5 overflow-y-auto px-6 py-8 text-center">
+      <Logo size={76} />
       <div className="inline-flex items-center gap-2 rounded-full glass px-4 py-1.5 text-[10px] uppercase tracking-[0.3em] text-accent">
         <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" /> v3.0 SOVEREIGN · Bosses Online
       </div>
@@ -182,6 +207,11 @@ function Menu({ name, setName, onPlay, onLB, up, setUp, shipId, setShipId }: any
       <p className="text-[9px] uppercase tracking-widest text-muted-foreground">
         WASD/Arrows · Space fire · E shield · Q nova bomb · Mobile: drag + buttons
       </p>
+      {onSignOut && (
+        <button onClick={onSignOut} className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground hover:text-destructive">
+          Sign out
+        </button>
+      )}
     </div>
   );
 }
@@ -375,8 +405,9 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
     };
     const shieldBurst = () => {
       if (ship.shieldCD > 0) return;
-      ship.shieldT = 2200; ship.shieldCD = 9000;
-      spawnExplosion(ship.x, ship.y, "#22d3ee", 30);
+      ship.shieldT = 4200 + upgrades.shield * 200;
+      ship.shieldCD = 9000;
+      spawnExplosion(ship.x, ship.y, "#22d3ee", 36);
     };
     actionsRef.current = { shield: shieldBurst, bomb: novaBomb };
 
@@ -413,6 +444,13 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
           bullets.push({ x: ship.x, y: ship.y - 14, vx: 0, vy: -14, r: bSize + 1, type: "p" });
         if (shipDef.id === "titan")
           bullets.push({ x: ship.x, y: ship.y - 14, vx: 0, vy: -10, r: 7, type: "heavy" });
+        if (upgrades.fire >= 4) {
+          bullets.push({ x: ship.x - 14, y: ship.y - 6, vx: -2.4, vy: -11, r: bSize, type: "p" });
+          bullets.push({ x: ship.x + 14, y: ship.y - 6, vx: 2.4, vy: -11, r: bSize, type: "p" });
+        }
+        if (upgrades.fire >= 5) {
+          bullets.push({ x: ship.x, y: ship.y - 20, vx: 0, vy: -16, r: bSize + 2, type: "heavy" });
+        }
       }
 
       // shield/bomb cooldowns + key triggers
@@ -830,12 +868,19 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
         <button
           onClick={() => actionsRef.current?.shield()}
           disabled={!shieldReady}
-          className="relative h-14 w-14 rounded-full border border-cyan-400/40 bg-gradient-to-br from-cyan-400/30 to-fuchsia-500/20 font-display text-xl text-foreground active:scale-95 disabled:opacity-40"
-          aria-label="Shield"
+          className="group relative h-16 w-16 rounded-full border-2 border-cyan-300/70 bg-gradient-to-br from-cyan-400/40 via-sky-500/30 to-fuchsia-500/30 text-foreground shadow-[0_0_24px_rgba(34,211,238,0.55)] transition-transform active:scale-95 disabled:opacity-40 disabled:shadow-none"
+          aria-label="Shield burst"
         >
-          ◯
+          {shieldReady && (
+            <span className="pointer-events-none absolute inset-0 rounded-full border-2 border-cyan-300/60 animate-ping" />
+          )}
+          <span className="pointer-events-none absolute inset-1.5 rounded-full border border-cyan-200/40" />
+          <svg viewBox="0 0 24 24" className="relative mx-auto h-7 w-7 drop-shadow-[0_0_6px_rgba(34,211,238,0.9)]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5l8-3z" />
+            <path d="M9 12l2 2 4-4" />
+          </svg>
           {!shieldReady && (
-            <span className="absolute inset-0 flex items-center justify-center text-[10px] font-mono text-cyan-300">
+            <span className="absolute inset-0 flex items-center justify-center rounded-full bg-background/60 text-[11px] font-mono font-bold text-cyan-200">
               {Math.ceil((localHud.shieldCD ?? 0) / 1000)}s
             </span>
           )}
