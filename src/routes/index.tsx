@@ -1,5 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState, useCallback } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { AuthScreen } from "@/components/AuthScreen";
+import { Logo } from "@/components/Logo";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -58,6 +61,23 @@ function GameApp() {
   const [lb, setLb] = useState<ReturnType<typeof loadLB>>([]);
   const [up, setUp] = useState(loadUp());
   const [shipId, setShipId] = useState<ShipId>(loadShip());
+  const [authed, setAuthed] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      setAuthed(!!session);
+      if (session?.user) {
+        supabase.from("profiles").select("username").eq("id", session.user.id).maybeSingle()
+          .then(({ data }) => {
+            const u = (data?.username ?? session.user.email?.split("@")[0] ?? "PILOT")
+              .toUpperCase().slice(0, 10);
+            setName(u);
+          });
+      }
+    });
+    supabase.auth.getSession().then(({ data }) => setAuthed(!!data.session));
+    return () => { sub.subscription.unsubscribe(); };
+  }, []);
 
   useEffect(() => { setLb(loadLB()); }, [screen]);
 
@@ -72,22 +92,26 @@ function GameApp() {
   return (
     <div className="relative h-[100dvh] w-full overflow-hidden bg-background text-foreground">
       <BackgroundFX />
-      {screen === "menu" && (
+      {authed === false && (
+        <AuthScreen onAuthed={(u) => { setName(u); setAuthed(true); }} />
+      )}
+      {authed && screen === "menu" && (
         <Menu
           name={name} setName={setName}
           onPlay={() => setScreen("play")}
           onLB={() => setScreen("leaderboard")}
           up={up} setUp={(u: ReturnType<typeof loadUp>) => { saveUp(u); setUp(u); }}
           shipId={shipId} setShipId={(id: ShipId) => { saveShip(id); setShipId(id); }}
+          onSignOut={async () => { await supabase.auth.signOut(); setAuthed(false); }}
         />
       )}
-      {screen === "play" && (
+      {authed && screen === "play" && (
         <Game upgrades={up} ship={SHIPS.find(s => s.id === shipId)!} onHud={setHud} onEnd={onGameOver} onQuit={() => setScreen("menu")} hud={hud} />
       )}
-      {screen === "gameover" && (
+      {authed && screen === "gameover" && (
         <GameOver hud={hud} onRetry={() => setScreen("play")} onMenu={() => setScreen("menu")} />
       )}
-      {screen === "leaderboard" && (
+      {authed && screen === "leaderboard" && (
         <Leaderboard lb={lb} onBack={() => setScreen("menu")} />
       )}
     </div>
@@ -102,7 +126,7 @@ function BackgroundFX() {
   );
 }
 
-function Menu({ name, setName, onPlay, onLB, up, setUp, shipId, setShipId }: any) {
+function Menu({ name, setName, onPlay, onLB, up, setUp, shipId, setShipId, onSignOut }: any) {
   const upgrade = (k: "dmg" | "fire" | "shield") => {
     const cost = up[k] * 50;
     if (up.credits < cost) return;
@@ -110,6 +134,7 @@ function Menu({ name, setName, onPlay, onLB, up, setUp, shipId, setShipId }: any
   };
   return (
     <div className="relative z-10 mx-auto flex h-full max-w-md flex-col items-center gap-5 overflow-y-auto px-6 py-8 text-center">
+      <Logo size={76} />
       <div className="inline-flex items-center gap-2 rounded-full glass px-4 py-1.5 text-[10px] uppercase tracking-[0.3em] text-accent">
         <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" /> v3.0 SOVEREIGN · Bosses Online
       </div>
@@ -182,6 +207,11 @@ function Menu({ name, setName, onPlay, onLB, up, setUp, shipId, setShipId }: any
       <p className="text-[9px] uppercase tracking-widest text-muted-foreground">
         WASD/Arrows · Space fire · E shield · Q nova bomb · Mobile: drag + buttons
       </p>
+      {onSignOut && (
+        <button onClick={onSignOut} className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground hover:text-destructive">
+          Sign out
+        </button>
+      )}
     </div>
   );
 }
