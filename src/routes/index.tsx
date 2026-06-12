@@ -387,7 +387,7 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
       if (keys["d"] || keys["arrowright"]) dx += 1;
       if (keys["w"] || keys["arrowup"]) dy -= 1;
       if (keys["s"] || keys["arrowdown"]) dy += 1;
-      const speed = 6;
+      const speed = shipDef.speed;
       if (touchTarget) {
         const tx = touchTarget.x - ship.x;
         const ty = touchTarget.y - 80 - ship.y;
@@ -404,12 +404,23 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
       ship.cool -= dt;
       const wantFire = keys[" "] || keys["space"] || touchTarget !== null;
       if ((wantFire || true) && ship.cool <= 0) {
-        const fireDelay = 220 / upgrades.fire;
+        const fireDelay = 220 / (upgrades.fire * shipDef.fireMul);
         ship.cool = fireDelay;
-        bullets.push({ x: ship.x - 8, y: ship.y - 10, vx: 0, vy: -12, r: 3 });
-        bullets.push({ x: ship.x + 8, y: ship.y - 10, vx: 0, vy: -12, r: 3 });
-        if (upgrades.fire >= 3) bullets.push({ x: ship.x, y: ship.y - 14, vx: 0, vy: -14, r: 4 });
+        const bSize = shipDef.id === "titan" ? 5 : 3;
+        bullets.push({ x: ship.x - 8, y: ship.y - 10, vx: 0, vy: -12, r: bSize, type: "p" });
+        bullets.push({ x: ship.x + 8, y: ship.y - 10, vx: 0, vy: -12, r: bSize, type: "p" });
+        if (upgrades.fire >= 3 || shipDef.id === "phantom")
+          bullets.push({ x: ship.x, y: ship.y - 14, vx: 0, vy: -14, r: bSize + 1, type: "p" });
+        if (shipDef.id === "titan")
+          bullets.push({ x: ship.x, y: ship.y - 14, vx: 0, vy: -10, r: 7, type: "heavy" });
       }
+
+      // shield/bomb cooldowns + key triggers
+      if (ship.shieldCD > 0) ship.shieldCD -= dt;
+      if (ship.shieldT > 0) ship.shieldT -= dt;
+      if (ship.bombCD > 0) ship.bombCD -= dt;
+      if (keys["e"]) { shieldBurst(); keys["e"] = false; }
+      if (keys["q"]) { novaBomb(); keys["q"] = false; }
 
       // stars
       for (const s of stars) {
