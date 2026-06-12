@@ -304,12 +304,21 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
       x: Math.random() * 2 - 1, y: Math.random() * 2 - 1, z: Math.random(),
     }));
 
-    const ship = { x: W / 2, y: H - 100, r: 14, hp: 100 * upgrades.shield, maxHp: 100 * upgrades.shield, cool: 0, inv: 0 };
+    const baseHp = 100 * upgrades.shield * shipDef.hpMul;
+    const ship = {
+      x: W / 2, y: H - 100,
+      r: shipDef.id === "titan" ? 17 : shipDef.id === "phantom" ? 12 : 14,
+      hp: baseHp, maxHp: baseHp, cool: 0, inv: 0,
+      shieldT: 0, shieldCD: 0, bombs: 1, bombCD: 0,
+    };
     const bullets: Entity[] = [];
     const enemies: Entity[] = [];
     const ebullets: Entity[] = [];
     const particles: Entity[] = [];
     const powerups: Entity[] = [];
+    let boss: any = null;
+    let bossIntroT = 0;
+    let bossWave = false;
 
     let score = 0, wave = 1, credits = 0, spawnT = 0, enemiesToSpawn = 6, waveBreak = 0;
     let last = performance.now();
