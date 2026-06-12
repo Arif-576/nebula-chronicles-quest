@@ -102,23 +102,22 @@ function BackgroundFX() {
   );
 }
 
-function Menu({ name, setName, onPlay, onLB, up, setUp }: any) {
+function Menu({ name, setName, onPlay, onLB, up, setUp, shipId, setShipId }: any) {
   const upgrade = (k: "dmg" | "fire" | "shield") => {
     const cost = up[k] * 50;
     if (up.credits < cost) return;
     setUp({ ...up, [k]: up[k] + 1, credits: up.credits - cost });
   };
   return (
-    <div className="relative z-10 mx-auto flex h-full max-w-md flex-col items-center justify-center gap-6 px-6 text-center">
+    <div className="relative z-10 mx-auto flex h-full max-w-md flex-col items-center gap-5 overflow-y-auto px-6 py-8 text-center">
       <div className="inline-flex items-center gap-2 rounded-full glass px-4 py-1.5 text-[10px] uppercase tracking-[0.3em] text-accent">
-        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" /> v2.4 RIFT · Online
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" /> v3.0 SOVEREIGN · Bosses Online
       </div>
-      <h1 className="font-display text-5xl font-black leading-none sm:text-6xl">
+      <h1 className="font-display text-4xl font-black leading-none sm:text-5xl">
         NEBULAR<br /><span className="text-gradient">ECHO</span>
       </h1>
-      <p className="text-sm text-muted-foreground">
-        Pilot your starfighter through endless waves of the Hollow Sovereignty.
-        Collect credits, forge upgrades, climb the leaderboard.
+      <p className="text-xs text-muted-foreground">
+        Survive waves, slay Sovereign bosses, harvest cores. Upgrade your fleet. Climb the Cinder Tournament.
       </p>
       <input
         value={name}
@@ -127,6 +126,30 @@ function Menu({ name, setName, onPlay, onLB, up, setUp }: any) {
         className="w-full rounded-full glass px-5 py-3 text-center font-mono tracking-widest outline-none focus:border-accent"
         placeholder="CALLSIGN"
       />
+
+      <div className="w-full glass rounded-2xl p-3 text-left">
+        <div className="mb-2 px-1 text-[10px] uppercase tracking-[0.3em] text-accent">Select Starfighter</div>
+        <div className="grid grid-cols-3 gap-2">
+          {SHIPS.map((s) => {
+            const sel = shipId === s.id;
+            return (
+              <button
+                key={s.id}
+                onClick={() => setShipId(s.id)}
+                className={`flex flex-col items-center gap-1 rounded-xl border p-2 transition-all ${sel ? "border-accent bg-accent/10 scale-[1.02]" : "border-border bg-secondary/30"}`}
+              >
+                <ShipIcon ship={s} size={32} />
+                <div className="text-[10px] font-display font-black">{s.name}</div>
+                <div className="text-[9px] uppercase tracking-wider text-muted-foreground">{s.tag}</div>
+              </button>
+            );
+          })}
+        </div>
+        <p className="mt-2 px-1 text-[10px] leading-tight text-muted-foreground">
+          {SHIPS.find((s) => s.id === shipId)?.desc}
+        </p>
+      </div>
+
       <button
         onClick={onPlay}
         className="w-full rounded-full bg-gradient-to-r from-fuchsia-500 to-cyan-400 px-8 py-4 font-display text-lg font-black tracking-widest text-background neon-glow transition-transform active:scale-95"
@@ -156,10 +179,33 @@ function Menu({ name, setName, onPlay, onLB, up, setUp }: any) {
         ✦ Leaderboard
       </button>
 
-      <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
-        Desktop: WASD/Arrows · Space to fire · Mobile: drag to fly, auto-fire
+      <p className="text-[9px] uppercase tracking-widest text-muted-foreground">
+        WASD/Arrows · Space fire · E shield · Q nova bomb · Mobile: drag + buttons
       </p>
     </div>
+  );
+}
+
+function ShipIcon({ ship, size = 28 }: { ship: ShipDef; size?: number }) {
+  const s = size / 2;
+  return (
+    <svg width={size} height={size} viewBox={`-${s} -${s} ${size} ${size}`}>
+      <defs>
+        <filter id={`g-${ship.id}`}><feGaussianBlur stdDeviation="0.8" /></filter>
+      </defs>
+      <g filter={`url(#g-${ship.id})`}>
+        {ship.id === "vanguard" && (
+          <polygon points={`0,-${s} ${s*0.85},${s*0.7} 0,${s*0.3} -${s*0.85},${s*0.7}`} fill={ship.color} />
+        )}
+        {ship.id === "phantom" && (
+          <polygon points={`0,-${s} ${s},${s*0.4} ${s*0.4},${s*0.7} -${s*0.4},${s*0.7} -${s},${s*0.4}`} fill={ship.color} />
+        )}
+        {ship.id === "titan" && (
+          <polygon points={`-${s*0.5},-${s*0.8} ${s*0.5},-${s*0.8} ${s},${s*0.5} -${s},${s*0.5}`} fill={ship.color} />
+        )}
+      </g>
+      <circle cx="0" cy="0" r={s * 0.18} fill={ship.accent} />
+    </svg>
   );
 }
 
