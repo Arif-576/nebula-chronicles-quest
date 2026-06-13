@@ -59,12 +59,6 @@ export function AuthScreen({ onAuthed }: { onAuthed: (username: string) => void 
   const google = async () => {
     setErr(null);
     try {
-      const { lovable } = await import("@/integrations/lovable/index" as any).catch(() => ({ lovable: null }));
-      if (lovable?.auth?.signInWithOAuth) {
-        const r = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin });
-        if (r.error) setErr(r.error.message || "Google sign-in failed");
-        return;
-      }
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: { redirectTo: window.location.origin },
