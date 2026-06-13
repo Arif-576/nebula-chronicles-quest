@@ -198,6 +198,9 @@ function Menu({ name, setName, onPlay, onLB, up, setUp, shipId, setShipId, onSig
             <span className="font-mono">Lv {up[k]} · {up[k] * 50}◈</span>
           </button>
         ))}
+        <div className="mt-1 px-1 text-[9px] leading-snug text-muted-foreground">
+          ◈ Weapon tiers: Lv3 lance · Lv4 wingtips · Lv5 rail-shard · Lv6 side beams · Lv7 rear guard · Lv8 homing missile
+        </div>
       </div>
 
       <button onClick={onLB} className="text-xs uppercase tracking-[0.3em] text-muted-foreground hover:text-accent">
