@@ -12,6 +12,8 @@ export function AuthScreen({ onAuthed }: { onAuthed: (username: string) => void 
   const [err, setErr] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
 
   const validate = () => {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return "Enter a valid email";
@@ -73,6 +75,24 @@ export function AuthScreen({ onAuthed }: { onAuthed: (username: string) => void 
     }
   };
 
+  const sendReset = async () => {
+    setErr(null); setInfo(null);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(forgotEmail)) { setErr("Enter a valid email"); return; }
+    setBusy(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) throw error;
+      setInfo("Recovery link sent. Check your inbox.");
+      setForgotOpen(false);
+    } catch (e: any) {
+      setErr(e?.message ?? "Couldn't send reset email");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="relative z-10 mx-auto flex h-full max-w-md flex-col items-center justify-center gap-5 px-6 py-8 text-center">
       <Logo size={88} />
@@ -128,6 +148,46 @@ export function AuthScreen({ onAuthed }: { onAuthed: (username: string) => void 
         >
           Continue with Google
         </button>
+
+        {mode === "signin" && !forgotOpen && (
+          <button
+            type="button"
+            onClick={() => { setForgotOpen(true); setForgotEmail(email); setErr(null); setInfo(null); }}
+            className="w-full text-[11px] uppercase tracking-[0.3em] text-muted-foreground hover:text-accent"
+          >
+            Forgot password?
+          </button>
+        )}
+
+        {forgotOpen && (
+          <div className="space-y-2 rounded-lg border border-accent/30 bg-accent/5 p-3">
+            <p className="text-[10px] uppercase tracking-widest text-accent">Recover Pilot Access</p>
+            <input
+              type="email"
+              value={forgotEmail}
+              onChange={(e) => setForgotEmail(e.target.value)}
+              className="w-full rounded-lg bg-secondary/40 px-3 py-2 text-sm outline-none border border-border focus:border-accent"
+              placeholder="Email for recovery link"
+            />
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={sendReset}
+                disabled={busy}
+                className="flex-1 rounded-full bg-accent px-4 py-2 text-xs font-bold uppercase tracking-widest text-background disabled:opacity-60"
+              >
+                Send Link
+              </button>
+              <button
+                type="button"
+                onClick={() => setForgotOpen(false)}
+                className="rounded-full border border-border px-4 py-2 text-xs uppercase tracking-widest text-muted-foreground"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
       </form>
 
       <button
