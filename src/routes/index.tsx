@@ -198,6 +198,9 @@ function Menu({ name, setName, onPlay, onLB, up, setUp, shipId, setShipId, onSig
             <span className="font-mono">Lv {up[k]} · {up[k] * 50}◈</span>
           </button>
         ))}
+        <div className="mt-1 px-1 text-[9px] leading-snug text-muted-foreground">
+          ◈ Weapon tiers: Lv3 lance · Lv4 wingtips · Lv5 rail-shard · Lv6 side beams · Lv7 rear guard · Lv8 homing missile
+        </div>
       </div>
 
       <button onClick={onLB} className="text-xs uppercase tracking-[0.3em] text-muted-foreground hover:text-accent">
@@ -450,6 +453,26 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
         }
         if (upgrades.fire >= 5) {
           bullets.push({ x: ship.x, y: ship.y - 20, vx: 0, vy: -16, r: bSize + 2, type: "heavy" });
+        }
+        if (upgrades.fire >= 6) {
+          // Side beams — sweeping lateral fire
+          bullets.push({ x: ship.x - 18, y: ship.y, vx: -8, vy: -6, r: bSize, type: "p" });
+          bullets.push({ x: ship.x + 18, y: ship.y, vx: 8, vy: -6, r: bSize, type: "p" });
+        }
+        if (upgrades.fire >= 7) {
+          // Rear guard — covers your back
+          bullets.push({ x: ship.x - 6, y: ship.y + 8, vx: -1.2, vy: 9, r: bSize, type: "p" });
+          bullets.push({ x: ship.x + 6, y: ship.y + 8, vx: 1.2, vy: 9, r: bSize, type: "p" });
+        }
+        if (upgrades.fire >= 8) {
+          // Homing missile — locks onto nearest enemy
+          let tx = ship.x, ty = -200, best = Infinity;
+          for (const en of enemies) {
+            const d = (en.x - ship.x) ** 2 + (en.y - ship.y) ** 2;
+            if (d < best) { best = d; tx = en.x; ty = en.y; }
+          }
+          const ang = Math.atan2(ty - ship.y, tx - ship.x);
+          bullets.push({ x: ship.x, y: ship.y - 18, vx: Math.cos(ang) * 13, vy: Math.sin(ang) * 13, r: bSize + 3, type: "heavy" });
         }
       }
 
