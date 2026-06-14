@@ -671,6 +671,10 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
         if (waveBreak <= 0) {
           wave++; enemiesToSpawn = 5 + wave * 2; waveBreak = 1500;
           credits += 50; score += 250;
+          // Level milestone every 3 waves
+          if (wave % 3 === 0) {
+            stateRef.current = { ...(stateRef.current || {}), levelUpT: 1800, levelLabel: `LEVEL ${Math.floor(wave / 3) + 1}` };
+          }
           if (wave % 5 === 0) { bossWave = true; spawnBoss(); }
         }
       }
@@ -687,6 +691,9 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
         score, wave, hp: ship.hp, maxHp: ship.maxHp, credits,
         shieldT: ship.shieldT, shieldCD: ship.shieldCD, bombs: ship.bombs,
         boss: boss ? { name: boss.name, hp: boss.hp, maxHp: boss.maxHp, color: boss.color } : null,
+        level: Math.floor(wave / 3) + 1,
+        levelUpT: Math.max(0, ((stateRef.current?.levelUpT ?? 0) as number) - dt),
+        levelLabel: stateRef.current?.levelLabel,
       };
     };
 
