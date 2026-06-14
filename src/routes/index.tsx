@@ -23,12 +23,15 @@ const LB_KEY = "nebular_echo_lb_v1";
 const UP_KEY = "nebular_echo_up_v2";
 const SHIP_KEY = "nebular_echo_ship_v1";
 
-type ShipId = "vanguard" | "phantom" | "titan";
+type ShipId = "vanguard" | "phantom" | "titan" | "spectre" | "nova" | "warden";
 interface ShipDef { id: ShipId; name: string; tag: string; speed: number; hpMul: number; fireMul: number; dmgMul: number; color: string; accent: string; desc: string; }
 const SHIPS: ShipDef[] = [
   { id: "vanguard", name: "VANGUARD", tag: "Balanced", speed: 6, hpMul: 1, fireMul: 1, dmgMul: 1, color: "#22d3ee", accent: "#f0abfc", desc: "All-round starfighter. Reliable in any tide." },
   { id: "phantom",  name: "PHANTOM",  tag: "Glass Cannon", speed: 7.6, hpMul: 0.7, fireMul: 1.35, dmgMul: 1.15, color: "#f0abfc", accent: "#22d3ee", desc: "Fragile hull, blistering fire rate, surgical damage." },
   { id: "titan",    name: "TITAN",    tag: "Bulwark",     speed: 4.6, hpMul: 1.7, fireMul: 0.85, dmgMul: 1.35, color: "#a3e635", accent: "#f59e0b", desc: "Heavy plating, slower frame, devastating shots." },
+  { id: "spectre",  name: "SPECTRE",  tag: "Stealth",     speed: 6.8, hpMul: 0.85, fireMul: 1.2, dmgMul: 1.1, color: "#67e8f9", accent: "#c084fc", desc: "Quick shadow-runner. Slippery, sharp, hard to pin." },
+  { id: "nova",     name: "NOVA",     tag: "Inferno",     speed: 5.6, hpMul: 1.1, fireMul: 1.1, dmgMul: 1.4, color: "#fb923c", accent: "#facc15", desc: "Plasma-tipped lance. Burns through tanks like paper." },
+  { id: "warden",   name: "WARDEN",   tag: "Guardian",    speed: 5.2, hpMul: 1.45, fireMul: 1.0, dmgMul: 1.05, color: "#34d399", accent: "#60a5fa", desc: "Reinforced shielding, steady cannon, never falters." },
 ];
 function loadShip(): ShipId {
   if (typeof window === "undefined") return "vanguard";
@@ -199,7 +202,7 @@ function Menu({ name, setName, onPlay, onLB, up, setUp, shipId, setShipId, onSig
           </button>
         ))}
         <div className="mt-1 px-1 text-[9px] leading-snug text-muted-foreground">
-          ◈ Weapon tiers: Lv3 lance · Lv4 wingtips · Lv5 rail-shard · Lv6 side beams · Lv7 rear guard · Lv8 homing missile
+          ◈ Weapons: L3 lance · L4 wingtips · L5 rail · L6 side beams · L7 rear guard · L8 homing · L9 plasma burst · L10 twin lances
         </div>
       </div>
 
@@ -235,6 +238,15 @@ function ShipIcon({ ship, size = 28 }: { ship: ShipDef; size?: number }) {
         )}
         {ship.id === "titan" && (
           <polygon points={`-${s*0.5},-${s*0.8} ${s*0.5},-${s*0.8} ${s},${s*0.5} -${s},${s*0.5}`} fill={ship.color} />
+        )}
+        {ship.id === "spectre" && (
+          <polygon points={`0,-${s} ${s*0.7},0 ${s*0.3},${s*0.8} -${s*0.3},${s*0.8} -${s*0.7},0`} fill={ship.color} />
+        )}
+        {ship.id === "nova" && (
+          <polygon points={`0,-${s} ${s*0.4},-${s*0.2} ${s},${s*0.7} 0,${s*0.4} -${s},${s*0.7} -${s*0.4},-${s*0.2}`} fill={ship.color} />
+        )}
+        {ship.id === "warden" && (
+          <polygon points={`0,-${s*0.95} ${s*0.9},-${s*0.2} ${s*0.7},${s*0.8} -${s*0.7},${s*0.8} -${s*0.9},-${s*0.2}`} fill={ship.color} />
         )}
       </g>
       <circle cx="0" cy="0" r={s * 0.18} fill={ship.accent} />
@@ -380,6 +392,10 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
       { name: "CRIMSON MAW",    color: "#fb7185", accent: "#fbbf24" },
       { name: "ECHO LEVIATHAN", color: "#a855f7", accent: "#a3e635" },
       { name: "NULL SOVEREIGN", color: "#22d3ee", accent: "#f0abfc" },
+      { name: "ASHEN WYRM",     color: "#fb923c", accent: "#fde047" },
+      { name: "GLACIAL TYRANT", color: "#67e8f9", accent: "#a5f3fc" },
+      { name: "OBSIDIAN REAPER",color: "#a3a3a3", accent: "#fb7185" },
+      { name: "STAR DEVOURER",  color: "#facc15", accent: "#f97316" },
     ];
     const spawnBoss = () => {
       const idx = Math.max(0, Math.floor(wave / 5 - 1)) % BOSSES.length;
@@ -473,6 +489,24 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
           }
           const ang = Math.atan2(ty - ship.y, tx - ship.x);
           bullets.push({ x: ship.x, y: ship.y - 18, vx: Math.cos(ang) * 13, vy: Math.sin(ang) * 13, r: bSize + 3, type: "heavy" });
+        }
+        if (upgrades.fire >= 9) {
+          // Plasma burst — radial scatter that shreds swarms
+          for (let k = -2; k <= 2; k++) {
+            const a = -Math.PI / 2 + k * 0.22;
+            bullets.push({ x: ship.x, y: ship.y - 16, vx: Math.cos(a) * 12, vy: Math.sin(a) * 12, r: bSize + 1, type: "p" });
+          }
+        }
+        if (upgrades.fire >= 10) {
+          // Twin homing lances
+          const targets = enemies.slice().sort((a, b) =>
+            ((a.x - ship.x) ** 2 + (a.y - ship.y) ** 2) - ((b.x - ship.x) ** 2 + (b.y - ship.y) ** 2)
+          ).slice(0, 2);
+          for (let k = 0; k < 2; k++) {
+            const t = targets[k];
+            const ang = t ? Math.atan2(t.y - ship.y, t.x - ship.x) : -Math.PI / 2 + (k === 0 ? -0.25 : 0.25);
+            bullets.push({ x: ship.x + (k === 0 ? -10 : 10), y: ship.y - 8, vx: Math.cos(ang) * 14, vy: Math.sin(ang) * 14, r: bSize + 2, type: "heavy" });
+          }
         }
       }
 
@@ -637,6 +671,10 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
         if (waveBreak <= 0) {
           wave++; enemiesToSpawn = 5 + wave * 2; waveBreak = 1500;
           credits += 50; score += 250;
+          // Level milestone every 3 waves
+          if (wave % 3 === 0) {
+            stateRef.current = { ...(stateRef.current || {}), levelUpT: 1800, levelLabel: `LEVEL ${Math.floor(wave / 3) + 1}` };
+          }
           if (wave % 5 === 0) { bossWave = true; spawnBoss(); }
         }
       }
@@ -653,6 +691,9 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
         score, wave, hp: ship.hp, maxHp: ship.maxHp, credits,
         shieldT: ship.shieldT, shieldCD: ship.shieldCD, bombs: ship.bombs,
         boss: boss ? { name: boss.name, hp: boss.hp, maxHp: boss.maxHp, color: boss.color } : null,
+        level: Math.floor(wave / 3) + 1,
+        levelUpT: Math.max(0, ((stateRef.current?.levelUpT ?? 0) as number) - dt),
+        levelLabel: stateRef.current?.levelLabel,
       };
     };
 
@@ -751,6 +792,25 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
         ctx.lineTo(ship.r * 0.5, -ship.r * 0.9);
         ctx.lineTo(ship.r, ship.r * 0.7);
         ctx.lineTo(-ship.r, ship.r * 0.7);
+      } else if (shipDef.id === "spectre") {
+        ctx.moveTo(0, -ship.r);
+        ctx.lineTo(ship.r * 0.7, 0);
+        ctx.lineTo(ship.r * 0.3, ship.r * 0.9);
+        ctx.lineTo(-ship.r * 0.3, ship.r * 0.9);
+        ctx.lineTo(-ship.r * 0.7, 0);
+      } else if (shipDef.id === "nova") {
+        ctx.moveTo(0, -ship.r);
+        ctx.lineTo(ship.r * 0.5, -ship.r * 0.2);
+        ctx.lineTo(ship.r, ship.r * 0.8);
+        ctx.lineTo(0, ship.r * 0.4);
+        ctx.lineTo(-ship.r, ship.r * 0.8);
+        ctx.lineTo(-ship.r * 0.5, -ship.r * 0.2);
+      } else if (shipDef.id === "warden") {
+        ctx.moveTo(0, -ship.r);
+        ctx.lineTo(ship.r * 0.95, -ship.r * 0.1);
+        ctx.lineTo(ship.r * 0.75, ship.r * 0.85);
+        ctx.lineTo(-ship.r * 0.75, ship.r * 0.85);
+        ctx.lineTo(-ship.r * 0.95, -ship.r * 0.1);
       } else {
         ctx.moveTo(0, -ship.r);
         ctx.lineTo(ship.r, ship.r * 0.8);
@@ -852,6 +912,7 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
           </div>
           <div className="mt-1 flex gap-4 text-[10px] uppercase tracking-widest text-muted-foreground">
             <span>Wave <span className="text-accent">{localHud.wave}</span></span>
+            <span>Lv <span className="text-accent">{localHud.level ?? 1}</span></span>
             <span>◈ <span className="text-foreground">{localHud.credits}</span></span>
           </div>
         </div>
@@ -874,6 +935,15 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
             <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-secondary">
               <div className="h-full transition-all" style={{ width: `${bossPct}%`, background: `linear-gradient(90deg, ${localHud.boss.color}, #f0abfc)` }} />
             </div>
+          </div>
+        </div>
+      )}
+
+      {(localHud.levelUpT ?? 0) > 0 && localHud.levelLabel && (
+        <div className="pointer-events-none absolute inset-x-0 top-1/3 z-20 flex justify-center">
+          <div className="glass rounded-2xl px-8 py-4 text-center neon-glow" style={{ animation: "pulse 1.2s ease-in-out infinite" }}>
+            <div className="text-[10px] uppercase tracking-[0.4em] text-accent">Milestone</div>
+            <div className="font-display text-3xl font-black text-gradient">{localHud.levelLabel}</div>
           </div>
         </div>
       )}
