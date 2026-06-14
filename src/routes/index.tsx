@@ -370,7 +370,16 @@ function RewardBox({ reward, onClaim }: { reward: { diamonds: number; coins: num
   );
 }
 
-function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
+function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, startLevel, hud }: any) {
+  // Derive legacy "upgrades" shape from cloud progress + ship upgrades.
+  const su = shipUpgrades(progress as Progress, shipDef.id as ShipId);
+  const upgrades = {
+    dmg: 1 + su.power * 0.18,
+    fire: weaponTier(su.power),
+    shield: 1 + su.defense * 0.15,
+    credits: 0,
+  };
+  const speedBoost = 1 + su.speed * 0.12;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stateRef = useRef<any>(null);
   const actionsRef = useRef<{ shield: () => void; bomb: () => void } | null>(null);
@@ -430,7 +439,8 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
     let bossIntroT = 0;
     let bossWave = false;
 
-    let score = 0, wave = 1, credits = 0, spawnT = 0, enemiesToSpawn = 6, waveBreak = 0;
+    let score = 0, wave = (startLevel as number) || 1, credits = 0, spawnT = 0;
+    let enemiesToSpawn = difficulty(wave).waveCount, waveBreak = 0;
     let last = performance.now();
     let raf = 0;
     let running = true;
@@ -447,8 +457,10 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
       const r = Math.random();
       const type = r < 0.7 ? "grunt" : r < 0.92 ? "fast" : "tank";
       const radius = type === "tank" ? 26 : type === "fast" ? 12 : 18;
-      const hp = (type === "tank" ? 6 : type === "fast" ? 1 : 2) * Math.ceil(wave / 2);
-      const vy = type === "fast" ? 2.5 : type === "tank" ? 0.7 : 1.4;
+      const diff = difficulty(wave);
+      const hp = Math.max(1, Math.round((type === "tank" ? 6 : type === "fast" ? 1 : 2) * diff.enemyHp));
+      const baseVy = type === "fast" ? 2.5 : type === "tank" ? 0.7 : 1.4;
+      const vy = baseVy * diff.enemySpeed;
       enemies.push({ x: 40 + Math.random() * (W - 80), y: -30, vx: (Math.random() - 0.5) * 0.6, vy, r: radius, hp, type, t: 0 });
     };
 
@@ -502,7 +514,7 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
       if (keys["d"] || keys["arrowright"]) dx += 1;
       if (keys["w"] || keys["arrowup"]) dy -= 1;
       if (keys["s"] || keys["arrowdown"]) dy += 1;
-      const speed = shipDef.speed;
+      const speed = shipDef.speed * speedBoost;
       if (touchTarget) {
         const tx = touchTarget.x - ship.x;
         const ty = touchTarget.y - 80 - ship.y;
@@ -603,7 +615,7 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
         e.x += e.vx; e.y += e.vy;
         if (e.x < e.r || e.x > W - e.r) e.vx *= -1;
         // fire
-        if (e.type !== "fast" && Math.random() < 0.004 * wave) {
+        if (e.type !== "fast" && Math.random() < difficulty(wave).enemyFire) {
           const ang = Math.atan2(ship.y - e.y, ship.x - e.x);
           ebullets.push({ x: e.x, y: e.y, vx: Math.cos(ang) * 4, vy: Math.sin(ang) * 4, r: 4 });
         }
@@ -730,15 +742,19 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
       // spawn
       spawnT -= dt;
       if (!boss && !bossWave && enemiesToSpawn > 0 && spawnT <= 0) {
-        spawnEnemy(); enemiesToSpawn--; spawnT = Math.max(180, 700 - wave * 30);
+        spawnEnemy(); enemiesToSpawn--; spawnT = difficulty(wave).spawnDelay;
       } else if (!boss && enemiesToSpawn === 0 && enemies.length === 0) {
         waveBreak -= dt;
         if (waveBreak <= 0) {
-          wave++; enemiesToSpawn = 5 + wave * 2; waveBreak = 1500;
-          credits += 50; score += 250;
-          // Level milestone every 3 waves
-          if (wave % 3 === 0) {
-            stateRef.current = { ...(stateRef.current || {}), levelUpT: 1800, levelLabel: `LEVEL ${Math.floor(wave / 3) + 1}` };
+          wave++;
+          const diff = difficulty(wave);
+          enemiesToSpawn = diff.waveCount; waveBreak = 1500;
+          credits += 30; score += 250;
+          const reg = regionForLevel(wave);
+          if (wave === reg.startLevel) {
+            stateRef.current = { ...(stateRef.current || {}), levelUpT: 2200, levelLabel: `SECTOR ${reg.id} · ${reg.name}` };
+          } else {
+            stateRef.current = { ...(stateRef.current || {}), levelUpT: 1200, levelLabel: `LEVEL ${wave}` };
           }
           if (wave % 5 === 0) { bossWave = true; spawnBoss(); }
         }
