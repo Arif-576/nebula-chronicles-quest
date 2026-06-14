@@ -239,6 +239,15 @@ function ShipIcon({ ship, size = 28 }: { ship: ShipDef; size?: number }) {
         {ship.id === "titan" && (
           <polygon points={`-${s*0.5},-${s*0.8} ${s*0.5},-${s*0.8} ${s},${s*0.5} -${s},${s*0.5}`} fill={ship.color} />
         )}
+        {ship.id === "spectre" && (
+          <polygon points={`0,-${s} ${s*0.7},0 ${s*0.3},${s*0.8} -${s*0.3},${s*0.8} -${s*0.7},0`} fill={ship.color} />
+        )}
+        {ship.id === "nova" && (
+          <polygon points={`0,-${s} ${s*0.4},-${s*0.2} ${s},${s*0.7} 0,${s*0.4} -${s},${s*0.7} -${s*0.4},-${s*0.2}`} fill={ship.color} />
+        )}
+        {ship.id === "warden" && (
+          <polygon points={`0,-${s*0.95} ${s*0.9},-${s*0.2} ${s*0.7},${s*0.8} -${s*0.7},${s*0.8} -${s*0.9},-${s*0.2}`} fill={ship.color} />
+        )}
       </g>
       <circle cx="0" cy="0" r={s * 0.18} fill={ship.accent} />
     </svg>
