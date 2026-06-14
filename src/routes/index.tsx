@@ -23,12 +23,15 @@ const LB_KEY = "nebular_echo_lb_v1";
 const UP_KEY = "nebular_echo_up_v2";
 const SHIP_KEY = "nebular_echo_ship_v1";
 
-type ShipId = "vanguard" | "phantom" | "titan";
+type ShipId = "vanguard" | "phantom" | "titan" | "spectre" | "nova" | "warden";
 interface ShipDef { id: ShipId; name: string; tag: string; speed: number; hpMul: number; fireMul: number; dmgMul: number; color: string; accent: string; desc: string; }
 const SHIPS: ShipDef[] = [
   { id: "vanguard", name: "VANGUARD", tag: "Balanced", speed: 6, hpMul: 1, fireMul: 1, dmgMul: 1, color: "#22d3ee", accent: "#f0abfc", desc: "All-round starfighter. Reliable in any tide." },
   { id: "phantom",  name: "PHANTOM",  tag: "Glass Cannon", speed: 7.6, hpMul: 0.7, fireMul: 1.35, dmgMul: 1.15, color: "#f0abfc", accent: "#22d3ee", desc: "Fragile hull, blistering fire rate, surgical damage." },
   { id: "titan",    name: "TITAN",    tag: "Bulwark",     speed: 4.6, hpMul: 1.7, fireMul: 0.85, dmgMul: 1.35, color: "#a3e635", accent: "#f59e0b", desc: "Heavy plating, slower frame, devastating shots." },
+  { id: "spectre",  name: "SPECTRE",  tag: "Stealth",     speed: 6.8, hpMul: 0.85, fireMul: 1.2, dmgMul: 1.1, color: "#67e8f9", accent: "#c084fc", desc: "Quick shadow-runner. Slippery, sharp, hard to pin." },
+  { id: "nova",     name: "NOVA",     tag: "Inferno",     speed: 5.6, hpMul: 1.1, fireMul: 1.1, dmgMul: 1.4, color: "#fb923c", accent: "#facc15", desc: "Plasma-tipped lance. Burns through tanks like paper." },
+  { id: "warden",   name: "WARDEN",   tag: "Guardian",    speed: 5.2, hpMul: 1.45, fireMul: 1.0, dmgMul: 1.05, color: "#34d399", accent: "#60a5fa", desc: "Reinforced shielding, steady cannon, never falters." },
 ];
 function loadShip(): ShipId {
   if (typeof window === "undefined") return "vanguard";
@@ -380,6 +383,10 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
       { name: "CRIMSON MAW",    color: "#fb7185", accent: "#fbbf24" },
       { name: "ECHO LEVIATHAN", color: "#a855f7", accent: "#a3e635" },
       { name: "NULL SOVEREIGN", color: "#22d3ee", accent: "#f0abfc" },
+      { name: "ASHEN WYRM",     color: "#fb923c", accent: "#fde047" },
+      { name: "GLACIAL TYRANT", color: "#67e8f9", accent: "#a5f3fc" },
+      { name: "OBSIDIAN REAPER",color: "#a3a3a3", accent: "#fb7185" },
+      { name: "STAR DEVOURER",  color: "#facc15", accent: "#f97316" },
     ];
     const spawnBoss = () => {
       const idx = Math.max(0, Math.floor(wave / 5 - 1)) % BOSSES.length;
