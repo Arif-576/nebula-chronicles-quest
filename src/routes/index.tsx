@@ -336,6 +336,40 @@ function Stat({ label, v }: { label: string; v: any }) {
   );
 }
 
+function RewardBox({ reward, onClaim }: { reward: { diamonds: number; coins: number; kind: "mini" | "region"; level: number }; onClaim: () => void }) {
+  const big = reward.kind === "region";
+  return (
+    <div className="absolute inset-0 z-40 grid place-items-center bg-black/60 backdrop-blur-sm">
+      <div className="glass mx-6 w-full max-w-sm rounded-3xl p-6 text-center neon-glow">
+        <div className="text-[10px] uppercase tracking-[0.4em] text-accent">
+          {big ? "Region Boss Down" : "Boss Down"}
+        </div>
+        <div className="my-2 text-5xl" style={{ animation: "pulse 1.4s ease-in-out infinite" }}>🎁</div>
+        <h2 className="font-display text-2xl font-black">
+          REWARD <span className="text-gradient">{big ? "VAULT" : "BOX"}</span>
+        </h2>
+        <p className="mt-1 text-[10px] uppercase tracking-widest text-muted-foreground">Level {reward.level} clear</p>
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <div className="rounded-2xl border border-cyan-300/40 bg-cyan-300/10 p-3">
+            <div className="text-[10px] uppercase tracking-widest text-cyan-300">Diamonds</div>
+            <div className="font-display text-2xl font-black">💎 {reward.diamonds}</div>
+          </div>
+          <div className="rounded-2xl border border-amber-300/40 bg-amber-300/10 p-3">
+            <div className="text-[10px] uppercase tracking-widest text-amber-300">Coins</div>
+            <div className="font-display text-2xl font-black">◈ {reward.coins}</div>
+          </div>
+        </div>
+        <button
+          onClick={onClaim}
+          className="mt-5 w-full rounded-full bg-gradient-to-r from-fuchsia-500 to-cyan-400 px-6 py-3 font-display font-black tracking-widest text-background neon-glow active:scale-95"
+        >
+          ✦ CLAIM
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stateRef = useRef<any>(null);
