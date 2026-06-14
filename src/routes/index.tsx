@@ -974,7 +974,8 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
       canvas.removeEventListener("touchmove", tMove);
       canvas.removeEventListener("touchend", tEnd);
     };
-  }, [upgrades, onEnd, shipDef]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shipDef.id, startLevel]);
 
   const hpPct = Math.max(0, Math.min(100, (localHud.hp / (localHud.maxHp || 1)) * 100));
   const bossPct = localHud.boss ? Math.max(0, (localHud.boss.hp / localHud.boss.maxHp) * 100) : 0;
