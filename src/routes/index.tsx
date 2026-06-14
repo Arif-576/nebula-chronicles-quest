@@ -4,8 +4,8 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { AuthScreen } from "@/components/AuthScreen";
 import { Logo } from "@/components/Logo";
-import { SHIPS, SHIP_BY_ID, type ShipDef, type ShipId } from "@/game/ships";
-import { REGIONS, MAX_LEVEL, regionForLevel, difficulty, bossReward } from "@/game/regions";
+import { SHIPS, SHIP_BY_ID, type ShipId } from "@/game/ships";
+import { MAX_LEVEL, regionForLevel, difficulty, bossReward } from "@/game/regions";
 import { loadProgress, saveProgress, shipUpgrades, type Progress } from "@/lib/progress";
 
 export const Route = createFileRoute("/")({
