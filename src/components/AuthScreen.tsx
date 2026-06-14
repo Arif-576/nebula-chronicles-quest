@@ -46,9 +46,11 @@ export function AuthScreen({ onAuthed }: { onAuthed: (username: string) => void 
       } else {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        const { data: prof } = await supabase
-          .from("profiles").select("username").eq("id", data.user!.id).maybeSingle();
-        onAuthed((prof?.username ?? email.split("@")[0]).toUpperCase().slice(0, 10));
+        // Fast path: derive a name from session metadata, skip extra round-trip.
+        const meta = (data.user?.user_metadata as any) || {};
+        const fallback = (meta.username ?? email.split("@")[0] ?? "PILOT")
+          .toString().toUpperCase().slice(0, 10);
+        onAuthed(fallback);
       }
     } catch (e: any) {
       setErr(e?.message ?? "Something went wrong");
