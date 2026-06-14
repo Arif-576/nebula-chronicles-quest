@@ -1,8 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { AuthScreen } from "@/components/AuthScreen";
 import { Logo } from "@/components/Logo";
+import { SHIPS, SHIP_BY_ID, type ShipDef, type ShipId } from "@/game/ships";
+import { REGIONS, MAX_LEVEL, regionForLevel, difficulty, bossReward } from "@/game/regions";
+import { loadProgress, saveProgress, shipUpgrades, type Progress } from "@/lib/progress";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -20,25 +24,6 @@ interface Entity { x: number; y: number; vx: number; vy: number; r: number; hp?:
 interface Star { x: number; y: number; z: number; }
 
 const LB_KEY = "nebular_echo_lb_v1";
-const UP_KEY = "nebular_echo_up_v2";
-const SHIP_KEY = "nebular_echo_ship_v1";
-
-type ShipId = "vanguard" | "phantom" | "titan" | "spectre" | "nova" | "warden";
-interface ShipDef { id: ShipId; name: string; tag: string; speed: number; hpMul: number; fireMul: number; dmgMul: number; color: string; accent: string; desc: string; }
-const SHIPS: ShipDef[] = [
-  { id: "vanguard", name: "VANGUARD", tag: "Balanced", speed: 6, hpMul: 1, fireMul: 1, dmgMul: 1, color: "#22d3ee", accent: "#f0abfc", desc: "All-round starfighter. Reliable in any tide." },
-  { id: "phantom",  name: "PHANTOM",  tag: "Glass Cannon", speed: 7.6, hpMul: 0.7, fireMul: 1.35, dmgMul: 1.15, color: "#f0abfc", accent: "#22d3ee", desc: "Fragile hull, blistering fire rate, surgical damage." },
-  { id: "titan",    name: "TITAN",    tag: "Bulwark",     speed: 4.6, hpMul: 1.7, fireMul: 0.85, dmgMul: 1.35, color: "#a3e635", accent: "#f59e0b", desc: "Heavy plating, slower frame, devastating shots." },
-  { id: "spectre",  name: "SPECTRE",  tag: "Stealth",     speed: 6.8, hpMul: 0.85, fireMul: 1.2, dmgMul: 1.1, color: "#67e8f9", accent: "#c084fc", desc: "Quick shadow-runner. Slippery, sharp, hard to pin." },
-  { id: "nova",     name: "NOVA",     tag: "Inferno",     speed: 5.6, hpMul: 1.1, fireMul: 1.1, dmgMul: 1.4, color: "#fb923c", accent: "#facc15", desc: "Plasma-tipped lance. Burns through tanks like paper." },
-  { id: "warden",   name: "WARDEN",   tag: "Guardian",    speed: 5.2, hpMul: 1.45, fireMul: 1.0, dmgMul: 1.05, color: "#34d399", accent: "#60a5fa", desc: "Reinforced shielding, steady cannon, never falters." },
-];
-function loadShip(): ShipId {
-  if (typeof window === "undefined") return "vanguard";
-  const v = localStorage.getItem(SHIP_KEY) as ShipId | null;
-  return v && SHIPS.find(s => s.id === v) ? v : "vanguard";
-}
-function saveShip(id: ShipId) { localStorage.setItem(SHIP_KEY, id); }
 
 function loadLB(): { name: string; score: number; wave: number }[] {
   if (typeof window === "undefined") return [];
@@ -50,72 +35,127 @@ function saveLB(name: string, score: number, wave: number) {
   lb.sort((a, b) => b.score - a.score);
   localStorage.setItem(LB_KEY, JSON.stringify(lb.slice(0, 10)));
 }
-function loadUp(): { dmg: number; fire: number; shield: number; credits: number } {
-  if (typeof window === "undefined") return { dmg: 1, fire: 1, shield: 1, credits: 0 };
-  try { return JSON.parse(localStorage.getItem(UP_KEY) || "") || { dmg: 1, fire: 1, shield: 1, credits: 0 }; }
-  catch { return { dmg: 1, fire: 1, shield: 1, credits: 0 }; }
-}
-function saveUp(u: ReturnType<typeof loadUp>) { localStorage.setItem(UP_KEY, JSON.stringify(u)); }
+
+// Fire-rate / weapon-tier proxy derived from cloud upgrades.
+// Power level scales weapon variety so endgame ships unlock the full arsenal.
+function weaponTier(power: number) { return 1 + Math.floor(power * 1.1); }
 
 function GameApp() {
   const [screen, setScreen] = useState<Screen>("menu");
   const [name, setName] = useState("PILOT");
   const [hud, setHud] = useState({ score: 0, wave: 1, hp: 100, credits: 0 });
   const [lb, setLb] = useState<ReturnType<typeof loadLB>>([]);
-  const [up, setUp] = useState(loadUp());
-  const [shipId, setShipId] = useState<ShipId>(loadShip());
+  const [progress, setProgress] = useState<Progress | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const [authed, setAuthed] = useState<boolean | null>(null);
+  const [reward, setReward] = useState<{ diamonds: number; coins: number; kind: "mini" | "region"; level: number } | null>(null);
 
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
       setAuthed(!!session);
-      if (session?.user) {
-        supabase.from("profiles").select("username").eq("id", session.user.id).maybeSingle()
-          .then(({ data }) => {
-            const u = (data?.username ?? session.user.email?.split("@")[0] ?? "PILOT")
-              .toUpperCase().slice(0, 10);
-            setName(u);
-          });
+      const u = session?.user;
+      if (u) {
+        setUserId(u.id);
+        const meta = (u.user_metadata as any) || {};
+        const display = (meta.username ?? u.email?.split("@")[0] ?? "PILOT").toUpperCase().slice(0, 10);
+        setName(display);
+        loadProgress(u.id).then(setProgress);
+      } else {
+        setUserId(null); setProgress(null);
       }
     });
-    supabase.auth.getSession().then(({ data }) => setAuthed(!!data.session));
+    supabase.auth.getSession().then(({ data }) => {
+      const s = data.session;
+      setAuthed(!!s);
+      if (s?.user) {
+        setUserId(s.user.id);
+        const meta = (s.user.user_metadata as any) || {};
+        const display = (meta.username ?? s.user.email?.split("@")[0] ?? "PILOT").toUpperCase().slice(0, 10);
+        setName(display);
+        loadProgress(s.user.id).then(setProgress);
+      }
+    });
     return () => { sub.subscription.unsubscribe(); };
   }, []);
 
   useEffect(() => { setLb(loadLB()); }, [screen]);
 
-  const onGameOver = useCallback((score: number, wave: number, credits: number) => {
+  const onGameOver = useCallback(async (score: number, wave: number, credits: number) => {
     saveLB(name || "PILOT", score, wave);
-    const nu = { ...up, credits: up.credits + credits };
-    saveUp(nu); setUp(nu);
+    if (progress && userId) {
+      const next: Progress = {
+        ...progress,
+        coins: progress.coins + credits,
+        max_level: Math.max(progress.max_level, wave),
+        max_region: Math.max(progress.max_region, regionForLevel(wave).id),
+        best_score: Math.max(progress.best_score, score),
+      };
+      setProgress(next);
+      await saveProgress(userId, {
+        coins: next.coins, max_level: next.max_level,
+        max_region: next.max_region, best_score: next.best_score,
+      });
+    }
     setHud((h) => ({ ...h, score, wave, credits }));
     setScreen("gameover");
-  }, [name, up]);
+  }, [name, progress, userId]);
+
+  const onBossKilled = useCallback((level: number) => {
+    setReward({ ...bossReward(level), level });
+  }, []);
+
+  const claimReward = useCallback(async () => {
+    if (!reward || !progress || !userId) { setReward(null); return; }
+    const next: Progress = {
+      ...progress,
+      diamonds: progress.diamonds + reward.diamonds,
+      coins: progress.coins + reward.coins,
+    };
+    setProgress(next);
+    await saveProgress(userId, { diamonds: next.diamonds, coins: next.coins });
+    setReward(null);
+  }, [reward, progress, userId]);
 
   return (
     <div className="relative h-[100dvh] w-full overflow-hidden bg-background text-foreground">
       <BackgroundFX />
+      {authed === null && (
+        <div className="absolute inset-0 z-30 grid place-items-center">
+          <div className="text-[10px] uppercase tracking-[0.4em] text-muted-foreground">Connecting…</div>
+        </div>
+      )}
       {authed === false && (
         <AuthScreen onAuthed={(u) => { setName(u); setAuthed(true); }} />
       )}
-      {authed && screen === "menu" && (
+      {authed && progress && screen === "menu" && (
         <Menu
           name={name} setName={setName}
           onPlay={() => setScreen("play")}
           onLB={() => setScreen("leaderboard")}
-          up={up} setUp={(u: ReturnType<typeof loadUp>) => { saveUp(u); setUp(u); }}
-          shipId={shipId} setShipId={(id: ShipId) => { saveShip(id); setShipId(id); }}
-          onSignOut={async () => { await supabase.auth.signOut(); setAuthed(false); }}
+          progress={progress}
+          onSignOut={async () => { await supabase.auth.signOut(); setAuthed(false); setProgress(null); }}
         />
       )}
-      {authed && screen === "play" && (
-        <Game upgrades={up} ship={SHIPS.find(s => s.id === shipId)!} onHud={setHud} onEnd={onGameOver} onQuit={() => setScreen("menu")} hud={hud} />
+      {authed && progress && screen === "play" && (
+        <Game
+          progress={progress}
+          ship={SHIP_BY_ID[progress.active_ship] ?? SHIPS[0]}
+          onHud={setHud}
+          onEnd={onGameOver}
+          onQuit={() => setScreen("menu")}
+          onBossKilled={onBossKilled}
+          startLevel={1}
+          hud={hud}
+        />
       )}
       {authed && screen === "gameover" && (
         <GameOver hud={hud} onRetry={() => setScreen("play")} onMenu={() => setScreen("menu")} />
       )}
       {authed && screen === "leaderboard" && (
         <Leaderboard lb={lb} onBack={() => setScreen("menu")} />
+      )}
+      {reward && (
+        <RewardBox reward={reward} onClaim={claimReward} />
       )}
     </div>
   );
