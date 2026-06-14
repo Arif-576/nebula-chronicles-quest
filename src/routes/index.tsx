@@ -772,7 +772,8 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
         score, wave, hp: ship.hp, maxHp: ship.maxHp, credits,
         shieldT: ship.shieldT, shieldCD: ship.shieldCD, bombs: ship.bombs,
         boss: boss ? { name: boss.name, hp: boss.hp, maxHp: boss.maxHp, color: boss.color } : null,
-        level: Math.floor(wave / 3) + 1,
+        level: wave,
+        region: regionForLevel(wave),
         levelUpT: Math.max(0, ((stateRef.current?.levelUpT ?? 0) as number) - dt),
         levelLabel: stateRef.current?.levelLabel,
       };
