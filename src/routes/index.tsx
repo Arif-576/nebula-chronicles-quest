@@ -202,7 +202,7 @@ function Menu({ name, setName, onPlay, onLB, up, setUp, shipId, setShipId, onSig
           </button>
         ))}
         <div className="mt-1 px-1 text-[9px] leading-snug text-muted-foreground">
-          ◈ Weapon tiers: Lv3 lance · Lv4 wingtips · Lv5 rail-shard · Lv6 side beams · Lv7 rear guard · Lv8 homing missile
+          ◈ Weapons: L3 lance · L4 wingtips · L5 rail · L6 side beams · L7 rear guard · L8 homing · L9 plasma burst · L10 twin lances
         </div>
       </div>
 
