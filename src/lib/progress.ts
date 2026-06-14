@@ -31,7 +31,7 @@ export function shipUpgrades(p: Progress, id: ShipId): ShipUpgrades {
 }
 
 export async function loadProgress(userId: string): Promise<Progress> {
-  const { data, error } = await supabase
+  const { data, error } = await (supabase as any)
     .from("pilot_progress" as any)
     .select("*").eq("user_id", userId).maybeSingle();
   if (error || !data) return EMPTY;
@@ -48,7 +48,7 @@ export async function loadProgress(userId: string): Promise<Progress> {
 }
 
 export async function saveProgress(userId: string, patch: Partial<Progress>): Promise<void> {
-  await supabase.from("pilot_progress" as any).upsert({
+  await (supabase as any).from("pilot_progress" as any).upsert({
     user_id: userId,
     ...patch,
   }, { onConflict: "user_id" });
