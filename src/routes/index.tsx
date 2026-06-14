@@ -1,8 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { AuthScreen } from "@/components/AuthScreen";
 import { Logo } from "@/components/Logo";
+import { SHIPS, SHIP_BY_ID, type ShipDef, type ShipId } from "@/game/ships";
+import { MAX_LEVEL, regionForLevel, difficulty, bossReward } from "@/game/regions";
+import { loadProgress, saveProgress, shipUpgrades, type Progress } from "@/lib/progress";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -20,25 +24,6 @@ interface Entity { x: number; y: number; vx: number; vy: number; r: number; hp?:
 interface Star { x: number; y: number; z: number; }
 
 const LB_KEY = "nebular_echo_lb_v1";
-const UP_KEY = "nebular_echo_up_v2";
-const SHIP_KEY = "nebular_echo_ship_v1";
-
-type ShipId = "vanguard" | "phantom" | "titan" | "spectre" | "nova" | "warden";
-interface ShipDef { id: ShipId; name: string; tag: string; speed: number; hpMul: number; fireMul: number; dmgMul: number; color: string; accent: string; desc: string; }
-const SHIPS: ShipDef[] = [
-  { id: "vanguard", name: "VANGUARD", tag: "Balanced", speed: 6, hpMul: 1, fireMul: 1, dmgMul: 1, color: "#22d3ee", accent: "#f0abfc", desc: "All-round starfighter. Reliable in any tide." },
-  { id: "phantom",  name: "PHANTOM",  tag: "Glass Cannon", speed: 7.6, hpMul: 0.7, fireMul: 1.35, dmgMul: 1.15, color: "#f0abfc", accent: "#22d3ee", desc: "Fragile hull, blistering fire rate, surgical damage." },
-  { id: "titan",    name: "TITAN",    tag: "Bulwark",     speed: 4.6, hpMul: 1.7, fireMul: 0.85, dmgMul: 1.35, color: "#a3e635", accent: "#f59e0b", desc: "Heavy plating, slower frame, devastating shots." },
-  { id: "spectre",  name: "SPECTRE",  tag: "Stealth",     speed: 6.8, hpMul: 0.85, fireMul: 1.2, dmgMul: 1.1, color: "#67e8f9", accent: "#c084fc", desc: "Quick shadow-runner. Slippery, sharp, hard to pin." },
-  { id: "nova",     name: "NOVA",     tag: "Inferno",     speed: 5.6, hpMul: 1.1, fireMul: 1.1, dmgMul: 1.4, color: "#fb923c", accent: "#facc15", desc: "Plasma-tipped lance. Burns through tanks like paper." },
-  { id: "warden",   name: "WARDEN",   tag: "Guardian",    speed: 5.2, hpMul: 1.45, fireMul: 1.0, dmgMul: 1.05, color: "#34d399", accent: "#60a5fa", desc: "Reinforced shielding, steady cannon, never falters." },
-];
-function loadShip(): ShipId {
-  if (typeof window === "undefined") return "vanguard";
-  const v = localStorage.getItem(SHIP_KEY) as ShipId | null;
-  return v && SHIPS.find(s => s.id === v) ? v : "vanguard";
-}
-function saveShip(id: ShipId) { localStorage.setItem(SHIP_KEY, id); }
 
 function loadLB(): { name: string; score: number; wave: number }[] {
   if (typeof window === "undefined") return [];
@@ -50,72 +35,127 @@ function saveLB(name: string, score: number, wave: number) {
   lb.sort((a, b) => b.score - a.score);
   localStorage.setItem(LB_KEY, JSON.stringify(lb.slice(0, 10)));
 }
-function loadUp(): { dmg: number; fire: number; shield: number; credits: number } {
-  if (typeof window === "undefined") return { dmg: 1, fire: 1, shield: 1, credits: 0 };
-  try { return JSON.parse(localStorage.getItem(UP_KEY) || "") || { dmg: 1, fire: 1, shield: 1, credits: 0 }; }
-  catch { return { dmg: 1, fire: 1, shield: 1, credits: 0 }; }
-}
-function saveUp(u: ReturnType<typeof loadUp>) { localStorage.setItem(UP_KEY, JSON.stringify(u)); }
+
+// Fire-rate / weapon-tier proxy derived from cloud upgrades.
+// Power level scales weapon variety so endgame ships unlock the full arsenal.
+function weaponTier(power: number) { return 1 + Math.floor(power * 1.1); }
 
 function GameApp() {
   const [screen, setScreen] = useState<Screen>("menu");
   const [name, setName] = useState("PILOT");
   const [hud, setHud] = useState({ score: 0, wave: 1, hp: 100, credits: 0 });
   const [lb, setLb] = useState<ReturnType<typeof loadLB>>([]);
-  const [up, setUp] = useState(loadUp());
-  const [shipId, setShipId] = useState<ShipId>(loadShip());
+  const [progress, setProgress] = useState<Progress | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const [authed, setAuthed] = useState<boolean | null>(null);
+  const [reward, setReward] = useState<{ diamonds: number; coins: number; kind: "mini" | "region"; level: number } | null>(null);
 
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
       setAuthed(!!session);
-      if (session?.user) {
-        supabase.from("profiles").select("username").eq("id", session.user.id).maybeSingle()
-          .then(({ data }) => {
-            const u = (data?.username ?? session.user.email?.split("@")[0] ?? "PILOT")
-              .toUpperCase().slice(0, 10);
-            setName(u);
-          });
+      const u = session?.user;
+      if (u) {
+        setUserId(u.id);
+        const meta = (u.user_metadata as any) || {};
+        const display = (meta.username ?? u.email?.split("@")[0] ?? "PILOT").toUpperCase().slice(0, 10);
+        setName(display);
+        loadProgress(u.id).then(setProgress);
+      } else {
+        setUserId(null); setProgress(null);
       }
     });
-    supabase.auth.getSession().then(({ data }) => setAuthed(!!data.session));
+    supabase.auth.getSession().then(({ data }) => {
+      const s = data.session;
+      setAuthed(!!s);
+      if (s?.user) {
+        setUserId(s.user.id);
+        const meta = (s.user.user_metadata as any) || {};
+        const display = (meta.username ?? s.user.email?.split("@")[0] ?? "PILOT").toUpperCase().slice(0, 10);
+        setName(display);
+        loadProgress(s.user.id).then(setProgress);
+      }
+    });
     return () => { sub.subscription.unsubscribe(); };
   }, []);
 
   useEffect(() => { setLb(loadLB()); }, [screen]);
 
-  const onGameOver = useCallback((score: number, wave: number, credits: number) => {
+  const onGameOver = useCallback(async (score: number, wave: number, credits: number) => {
     saveLB(name || "PILOT", score, wave);
-    const nu = { ...up, credits: up.credits + credits };
-    saveUp(nu); setUp(nu);
+    if (progress && userId) {
+      const next: Progress = {
+        ...progress,
+        coins: progress.coins + credits,
+        max_level: Math.max(progress.max_level, wave),
+        max_region: Math.max(progress.max_region, regionForLevel(wave).id),
+        best_score: Math.max(progress.best_score, score),
+      };
+      setProgress(next);
+      await saveProgress(userId, {
+        coins: next.coins, max_level: next.max_level,
+        max_region: next.max_region, best_score: next.best_score,
+      });
+    }
     setHud((h) => ({ ...h, score, wave, credits }));
     setScreen("gameover");
-  }, [name, up]);
+  }, [name, progress, userId]);
+
+  const onBossKilled = useCallback((level: number) => {
+    setReward({ ...bossReward(level), level });
+  }, []);
+
+  const claimReward = useCallback(async () => {
+    if (!reward || !progress || !userId) { setReward(null); return; }
+    const next: Progress = {
+      ...progress,
+      diamonds: progress.diamonds + reward.diamonds,
+      coins: progress.coins + reward.coins,
+    };
+    setProgress(next);
+    await saveProgress(userId, { diamonds: next.diamonds, coins: next.coins });
+    setReward(null);
+  }, [reward, progress, userId]);
 
   return (
     <div className="relative h-[100dvh] w-full overflow-hidden bg-background text-foreground">
       <BackgroundFX />
+      {authed === null && (
+        <div className="absolute inset-0 z-30 grid place-items-center">
+          <div className="text-[10px] uppercase tracking-[0.4em] text-muted-foreground">Connecting…</div>
+        </div>
+      )}
       {authed === false && (
         <AuthScreen onAuthed={(u) => { setName(u); setAuthed(true); }} />
       )}
-      {authed && screen === "menu" && (
+      {authed && progress && screen === "menu" && (
         <Menu
           name={name} setName={setName}
           onPlay={() => setScreen("play")}
           onLB={() => setScreen("leaderboard")}
-          up={up} setUp={(u: ReturnType<typeof loadUp>) => { saveUp(u); setUp(u); }}
-          shipId={shipId} setShipId={(id: ShipId) => { saveShip(id); setShipId(id); }}
-          onSignOut={async () => { await supabase.auth.signOut(); setAuthed(false); }}
+          progress={progress}
+          onSignOut={async () => { await supabase.auth.signOut(); setAuthed(false); setProgress(null); }}
         />
       )}
-      {authed && screen === "play" && (
-        <Game upgrades={up} ship={SHIPS.find(s => s.id === shipId)!} onHud={setHud} onEnd={onGameOver} onQuit={() => setScreen("menu")} hud={hud} />
+      {authed && progress && screen === "play" && (
+        <Game
+          progress={progress}
+          ship={SHIP_BY_ID[progress.active_ship] ?? SHIPS[0]}
+          onHud={setHud}
+          onEnd={onGameOver}
+          onQuit={() => setScreen("menu")}
+          onBossKilled={onBossKilled}
+          startLevel={1}
+          hud={hud}
+        />
       )}
       {authed && screen === "gameover" && (
         <GameOver hud={hud} onRetry={() => setScreen("play")} onMenu={() => setScreen("menu")} />
       )}
       {authed && screen === "leaderboard" && (
         <Leaderboard lb={lb} onBack={() => setScreen("menu")} />
+      )}
+      {reward && (
+        <RewardBox reward={reward} onClaim={claimReward} />
       )}
     </div>
   );
@@ -129,24 +169,49 @@ function BackgroundFX() {
   );
 }
 
-function Menu({ name, setName, onPlay, onLB, up, setUp, shipId, setShipId, onSignOut }: any) {
-  const upgrade = (k: "dmg" | "fire" | "shield") => {
-    const cost = up[k] * 50;
-    if (up.credits < cost) return;
-    setUp({ ...up, [k]: up[k] + 1, credits: up.credits - cost });
-  };
+function Menu({ name, setName, onPlay, onLB, progress, onSignOut }: any) {
+  const p: Progress = progress;
+  const ship = SHIP_BY_ID[p.active_ship as ShipId] ?? SHIPS[0];
+  const region = regionForLevel(p.max_level);
+  const nextLevel = Math.min(MAX_LEVEL, p.max_level);
   return (
     <div className="relative z-10 mx-auto flex h-full max-w-md flex-col items-center gap-5 overflow-y-auto px-6 py-8 text-center">
       <Logo size={76} />
       <div className="inline-flex items-center gap-2 rounded-full glass px-4 py-1.5 text-[10px] uppercase tracking-[0.3em] text-accent">
-        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" /> v3.0 SOVEREIGN · Bosses Online
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" /> v4 SOVEREIGN · 6 Regions · 60 Levels
       </div>
       <h1 className="font-display text-4xl font-black leading-none sm:text-5xl">
         NEBULAR<br /><span className="text-gradient">ECHO</span>
       </h1>
       <p className="text-xs text-muted-foreground">
-        Survive waves, slay Sovereign bosses, harvest cores. Upgrade your fleet. Climb the Cinder Tournament.
+        Push through six regions, slay Sovereign bosses, crack reward boxes, and forge your fleet in the Hangar.
       </p>
+
+      <div className="grid w-full grid-cols-2 gap-2">
+        <div className="glass rounded-xl p-3 text-left">
+          <div className="text-[10px] uppercase tracking-widest text-cyan-300">💎 Diamonds</div>
+          <div className="font-mono text-lg">{p.diamonds.toLocaleString()}</div>
+        </div>
+        <div className="glass rounded-xl p-3 text-left">
+          <div className="text-[10px] uppercase tracking-widest text-amber-300">◈ Coins</div>
+          <div className="font-mono text-lg">{p.coins.toLocaleString()}</div>
+        </div>
+      </div>
+
+      <div className="glass w-full rounded-2xl p-3 text-left">
+        <div className="text-[10px] uppercase tracking-[0.3em]" style={{ color: region.color }}>
+          Sector {region.id} · {region.name}
+        </div>
+        <div className="mt-1 text-[10px] text-muted-foreground">{region.tagline}</div>
+        <div className="mt-2 flex items-center justify-between text-[10px] uppercase tracking-widest text-muted-foreground">
+          <span>Best Level <span className="text-accent">L{p.max_level}/{MAX_LEVEL}</span></span>
+          <span>Best Score <span className="text-accent">{p.best_score.toLocaleString()}</span></span>
+        </div>
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-secondary">
+          <div className="h-full" style={{ width: `${(nextLevel / MAX_LEVEL) * 100}%`, background: `linear-gradient(90deg, ${region.color}, #f0abfc)` }} />
+        </div>
+      </div>
+
       <input
         value={name}
         maxLength={10}
@@ -155,56 +220,22 @@ function Menu({ name, setName, onPlay, onLB, up, setUp, shipId, setShipId, onSig
         placeholder="CALLSIGN"
       />
 
-      <div className="w-full glass rounded-2xl p-3 text-left">
-        <div className="mb-2 px-1 text-[10px] uppercase tracking-[0.3em] text-accent">Select Starfighter</div>
-        <div className="grid grid-cols-3 gap-2">
-          {SHIPS.map((s) => {
-            const sel = shipId === s.id;
-            return (
-              <button
-                key={s.id}
-                onClick={() => setShipId(s.id)}
-                className={`flex flex-col items-center gap-1 rounded-xl border p-2 transition-all ${sel ? "border-accent bg-accent/10 scale-[1.02]" : "border-border bg-secondary/30"}`}
-              >
-                <ShipIcon ship={s} size={32} />
-                <div className="text-[10px] font-display font-black">{s.name}</div>
-                <div className="text-[9px] uppercase tracking-wider text-muted-foreground">{s.tag}</div>
-              </button>
-            );
-          })}
+      <div className="w-full glass rounded-2xl p-3 flex items-center gap-3 text-left">
+        <ShipIcon ship={ship} size={44} />
+        <div className="flex-1">
+          <div className="text-[10px] uppercase tracking-[0.3em] text-accent">Active Frame</div>
+          <div className="font-display text-sm font-black">{ship.name}</div>
+          <div className="text-[10px] text-muted-foreground">{ship.tag}</div>
         </div>
-        <p className="mt-2 px-1 text-[10px] leading-tight text-muted-foreground">
-          {SHIPS.find((s) => s.id === shipId)?.desc}
-        </p>
+        <Link to="/hangar" className="rounded-full bg-gradient-to-r from-cyan-400 to-fuchsia-500 px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-background">
+          Hangar
+        </Link>
       </div>
 
       <button
         onClick={onPlay}
         className="w-full rounded-full bg-gradient-to-r from-fuchsia-500 to-cyan-400 px-8 py-4 font-display text-lg font-black tracking-widest text-background neon-glow transition-transform active:scale-95"
       >▶ LAUNCH</button>
-
-      <div className="w-full glass rounded-2xl p-4 text-left">
-        <div className="mb-3 flex items-center justify-between text-xs uppercase tracking-widest">
-          <span className="text-accent">Forge · Upgrades</span>
-          <span className="font-mono text-foreground">{up.credits} ◈</span>
-        </div>
-        {(["dmg", "fire", "shield"] as const).map((k) => (
-          <button
-            key={k}
-            onClick={() => upgrade(k)}
-            disabled={up.credits < up[k] * 50}
-            className="mb-2 flex w-full items-center justify-between rounded-xl border border-border bg-secondary/40 px-4 py-2 text-sm transition-colors hover:border-accent disabled:opacity-50"
-          >
-            <span className="uppercase tracking-widest text-muted-foreground">
-              {k === "dmg" ? "Damage" : k === "fire" ? "Fire Rate" : "Shield"}
-            </span>
-            <span className="font-mono">Lv {up[k]} · {up[k] * 50}◈</span>
-          </button>
-        ))}
-        <div className="mt-1 px-1 text-[9px] leading-snug text-muted-foreground">
-          ◈ Weapons: L3 lance · L4 wingtips · L5 rail · L6 side beams · L7 rear guard · L8 homing · L9 plasma burst · L10 twin lances
-        </div>
-      </div>
 
       <button onClick={onLB} className="text-xs uppercase tracking-[0.3em] text-muted-foreground hover:text-accent">
         ✦ Leaderboard
@@ -305,7 +336,50 @@ function Stat({ label, v }: { label: string; v: any }) {
   );
 }
 
-function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
+function RewardBox({ reward, onClaim }: { reward: { diamonds: number; coins: number; kind: "mini" | "region"; level: number }; onClaim: () => void }) {
+  const big = reward.kind === "region";
+  return (
+    <div className="absolute inset-0 z-40 grid place-items-center bg-black/60 backdrop-blur-sm">
+      <div className="glass mx-6 w-full max-w-sm rounded-3xl p-6 text-center neon-glow">
+        <div className="text-[10px] uppercase tracking-[0.4em] text-accent">
+          {big ? "Region Boss Down" : "Boss Down"}
+        </div>
+        <div className="my-2 text-5xl" style={{ animation: "pulse 1.4s ease-in-out infinite" }}>🎁</div>
+        <h2 className="font-display text-2xl font-black">
+          REWARD <span className="text-gradient">{big ? "VAULT" : "BOX"}</span>
+        </h2>
+        <p className="mt-1 text-[10px] uppercase tracking-widest text-muted-foreground">Level {reward.level} clear</p>
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <div className="rounded-2xl border border-cyan-300/40 bg-cyan-300/10 p-3">
+            <div className="text-[10px] uppercase tracking-widest text-cyan-300">Diamonds</div>
+            <div className="font-display text-2xl font-black">💎 {reward.diamonds}</div>
+          </div>
+          <div className="rounded-2xl border border-amber-300/40 bg-amber-300/10 p-3">
+            <div className="text-[10px] uppercase tracking-widest text-amber-300">Coins</div>
+            <div className="font-display text-2xl font-black">◈ {reward.coins}</div>
+          </div>
+        </div>
+        <button
+          onClick={onClaim}
+          className="mt-5 w-full rounded-full bg-gradient-to-r from-fuchsia-500 to-cyan-400 px-6 py-3 font-display font-black tracking-widest text-background neon-glow active:scale-95"
+        >
+          ✦ CLAIM
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, startLevel, hud }: any) {
+  // Derive legacy "upgrades" shape from cloud progress + ship upgrades.
+  const su = shipUpgrades(progress as Progress, shipDef.id as ShipId);
+  const upgrades = {
+    dmg: 1 + su.power * 0.18,
+    fire: weaponTier(su.power),
+    shield: 1 + su.defense * 0.15,
+    credits: 0,
+  };
+  const speedBoost = 1 + su.speed * 0.12;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stateRef = useRef<any>(null);
   const actionsRef = useRef<{ shield: () => void; bomb: () => void } | null>(null);
@@ -365,7 +439,8 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
     let bossIntroT = 0;
     let bossWave = false;
 
-    let score = 0, wave = 1, credits = 0, spawnT = 0, enemiesToSpawn = 6, waveBreak = 0;
+    let score = 0, wave = (startLevel as number) || 1, credits = 0, spawnT = 0;
+    let enemiesToSpawn = difficulty(wave).waveCount, waveBreak = 0;
     let last = performance.now();
     let raf = 0;
     let running = true;
@@ -382,8 +457,10 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
       const r = Math.random();
       const type = r < 0.7 ? "grunt" : r < 0.92 ? "fast" : "tank";
       const radius = type === "tank" ? 26 : type === "fast" ? 12 : 18;
-      const hp = (type === "tank" ? 6 : type === "fast" ? 1 : 2) * Math.ceil(wave / 2);
-      const vy = type === "fast" ? 2.5 : type === "tank" ? 0.7 : 1.4;
+      const diff = difficulty(wave);
+      const hp = Math.max(1, Math.round((type === "tank" ? 6 : type === "fast" ? 1 : 2) * diff.enemyHp));
+      const baseVy = type === "fast" ? 2.5 : type === "tank" ? 0.7 : 1.4;
+      const vy = baseVy * diff.enemySpeed;
       enemies.push({ x: 40 + Math.random() * (W - 80), y: -30, vx: (Math.random() - 0.5) * 0.6, vy, r: radius, hp, type, t: 0 });
     };
 
@@ -437,7 +514,7 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
       if (keys["d"] || keys["arrowright"]) dx += 1;
       if (keys["w"] || keys["arrowup"]) dy -= 1;
       if (keys["s"] || keys["arrowdown"]) dy += 1;
-      const speed = shipDef.speed;
+      const speed = shipDef.speed * speedBoost;
       if (touchTarget) {
         const tx = touchTarget.x - ship.x;
         const ty = touchTarget.y - 80 - ship.y;
@@ -538,7 +615,7 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
         e.x += e.vx; e.y += e.vy;
         if (e.x < e.r || e.x > W - e.r) e.vx *= -1;
         // fire
-        if (e.type !== "fast" && Math.random() < 0.004 * wave) {
+        if (e.type !== "fast" && Math.random() < difficulty(wave).enemyFire) {
           const ang = Math.atan2(ship.y - e.y, ship.x - e.x);
           ebullets.push({ x: e.x, y: e.y, vx: Math.cos(ang) * 4, vy: Math.sin(ang) * 4, r: 4 });
         }
@@ -614,9 +691,9 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
           spawnExplosion(boss.x, boss.y, boss.color, 80);
           spawnExplosion(boss.x, boss.y, boss.accent, 60);
           score += 2000 + wave * 100;
-          credits += 200;
           ship.bombs = Math.min(5, ship.bombs + 2);
           for (let k = 0; k < 3; k++) powerups.push({ x: boss.x + (k - 1) * 30, y: boss.y, vx: 0, vy: 1.5, r: 11, type: k === 0 ? "heal" : k === 1 ? "credit" : "bomb" });
+          onBossKilled?.(wave);
           boss = null;
           bossWave = false;
           waveBreak = 2000;
@@ -665,15 +742,19 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
       // spawn
       spawnT -= dt;
       if (!boss && !bossWave && enemiesToSpawn > 0 && spawnT <= 0) {
-        spawnEnemy(); enemiesToSpawn--; spawnT = Math.max(180, 700 - wave * 30);
+        spawnEnemy(); enemiesToSpawn--; spawnT = difficulty(wave).spawnDelay;
       } else if (!boss && enemiesToSpawn === 0 && enemies.length === 0) {
         waveBreak -= dt;
         if (waveBreak <= 0) {
-          wave++; enemiesToSpawn = 5 + wave * 2; waveBreak = 1500;
-          credits += 50; score += 250;
-          // Level milestone every 3 waves
-          if (wave % 3 === 0) {
-            stateRef.current = { ...(stateRef.current || {}), levelUpT: 1800, levelLabel: `LEVEL ${Math.floor(wave / 3) + 1}` };
+          wave++;
+          const diff = difficulty(wave);
+          enemiesToSpawn = diff.waveCount; waveBreak = 1500;
+          credits += 30; score += 250;
+          const reg = regionForLevel(wave);
+          if (wave === reg.startLevel) {
+            stateRef.current = { ...(stateRef.current || {}), levelUpT: 2200, levelLabel: `SECTOR ${reg.id} · ${reg.name}` };
+          } else {
+            stateRef.current = { ...(stateRef.current || {}), levelUpT: 1200, levelLabel: `LEVEL ${wave}` };
           }
           if (wave % 5 === 0) { bossWave = true; spawnBoss(); }
         }
@@ -691,7 +772,8 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
         score, wave, hp: ship.hp, maxHp: ship.maxHp, credits,
         shieldT: ship.shieldT, shieldCD: ship.shieldCD, bombs: ship.bombs,
         boss: boss ? { name: boss.name, hp: boss.hp, maxHp: boss.maxHp, color: boss.color } : null,
-        level: Math.floor(wave / 3) + 1,
+        level: wave,
+        region: regionForLevel(wave),
         levelUpT: Math.max(0, ((stateRef.current?.levelUpT ?? 0) as number) - dt),
         levelLabel: stateRef.current?.levelLabel,
       };
@@ -892,7 +974,8 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
       canvas.removeEventListener("touchmove", tMove);
       canvas.removeEventListener("touchend", tEnd);
     };
-  }, [upgrades, onEnd, shipDef]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shipDef.id, startLevel]);
 
   const hpPct = Math.max(0, Math.min(100, (localHud.hp / (localHud.maxHp || 1)) * 100));
   const bossPct = localHud.boss ? Math.max(0, (localHud.boss.hp / localHud.boss.maxHp) * 100) : 0;
@@ -911,7 +994,7 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
             </div>
           </div>
           <div className="mt-1 flex gap-4 text-[10px] uppercase tracking-widest text-muted-foreground">
-            <span>Wave <span className="text-accent">{localHud.wave}</span></span>
+            <span style={{ color: localHud.region?.color }}>S{localHud.region?.id ?? 1}</span>
             <span>Lv <span className="text-accent">{localHud.level ?? 1}</span></span>
             <span>◈ <span className="text-foreground">{localHud.credits}</span></span>
           </div>

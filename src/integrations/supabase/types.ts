@@ -14,6 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
+      pilot_progress: {
+        Row: {
+          active_ship: string
+          best_score: number
+          coins: number
+          created_at: string
+          diamonds: number
+          max_level: number
+          max_region: number
+          owned_ships: string[]
+          updated_at: string
+          upgrades: Json
+          user_id: string
+        }
+        Insert: {
+          active_ship?: string
+          best_score?: number
+          coins?: number
+          created_at?: string
+          diamonds?: number
+          max_level?: number
+          max_region?: number
+          owned_ships?: string[]
+          updated_at?: string
+          upgrades?: Json
+          user_id: string
+        }
+        Update: {
+          active_ship?: string
+          best_score?: number
+          coins?: number
+          created_at?: string
+          diamonds?: number
+          max_level?: number
+          max_region?: number
+          owned_ships?: string[]
+          updated_at?: string
+          upgrades?: Json
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
