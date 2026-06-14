@@ -792,6 +792,25 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
         ctx.lineTo(ship.r * 0.5, -ship.r * 0.9);
         ctx.lineTo(ship.r, ship.r * 0.7);
         ctx.lineTo(-ship.r, ship.r * 0.7);
+      } else if (shipDef.id === "spectre") {
+        ctx.moveTo(0, -ship.r);
+        ctx.lineTo(ship.r * 0.7, 0);
+        ctx.lineTo(ship.r * 0.3, ship.r * 0.9);
+        ctx.lineTo(-ship.r * 0.3, ship.r * 0.9);
+        ctx.lineTo(-ship.r * 0.7, 0);
+      } else if (shipDef.id === "nova") {
+        ctx.moveTo(0, -ship.r);
+        ctx.lineTo(ship.r * 0.5, -ship.r * 0.2);
+        ctx.lineTo(ship.r, ship.r * 0.8);
+        ctx.lineTo(0, ship.r * 0.4);
+        ctx.lineTo(-ship.r, ship.r * 0.8);
+        ctx.lineTo(-ship.r * 0.5, -ship.r * 0.2);
+      } else if (shipDef.id === "warden") {
+        ctx.moveTo(0, -ship.r);
+        ctx.lineTo(ship.r * 0.95, -ship.r * 0.1);
+        ctx.lineTo(ship.r * 0.75, ship.r * 0.85);
+        ctx.lineTo(-ship.r * 0.75, ship.r * 0.85);
+        ctx.lineTo(-ship.r * 0.95, -ship.r * 0.1);
       } else {
         ctx.moveTo(0, -ship.r);
         ctx.lineTo(ship.r, ship.r * 0.8);
