@@ -994,7 +994,7 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
             </div>
           </div>
           <div className="mt-1 flex gap-4 text-[10px] uppercase tracking-widest text-muted-foreground">
-            <span>Wave <span className="text-accent">{localHud.wave}</span></span>
+            <span style={{ color: localHud.region?.color }}>S{localHud.region?.id ?? 1}</span>
             <span>Lv <span className="text-accent">{localHud.level ?? 1}</span></span>
             <span>◈ <span className="text-foreground">{localHud.credits}</span></span>
           </div>
