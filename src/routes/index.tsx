@@ -490,6 +490,24 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
           const ang = Math.atan2(ty - ship.y, tx - ship.x);
           bullets.push({ x: ship.x, y: ship.y - 18, vx: Math.cos(ang) * 13, vy: Math.sin(ang) * 13, r: bSize + 3, type: "heavy" });
         }
+        if (upgrades.fire >= 9) {
+          // Plasma burst — radial scatter that shreds swarms
+          for (let k = -2; k <= 2; k++) {
+            const a = -Math.PI / 2 + k * 0.22;
+            bullets.push({ x: ship.x, y: ship.y - 16, vx: Math.cos(a) * 12, vy: Math.sin(a) * 12, r: bSize + 1, type: "p" });
+          }
+        }
+        if (upgrades.fire >= 10) {
+          // Twin homing lances
+          const targets = enemies.slice().sort((a, b) =>
+            ((a.x - ship.x) ** 2 + (a.y - ship.y) ** 2) - ((b.x - ship.x) ** 2 + (b.y - ship.y) ** 2)
+          ).slice(0, 2);
+          for (let k = 0; k < 2; k++) {
+            const t = targets[k];
+            const ang = t ? Math.atan2(t.y - ship.y, t.x - ship.x) : -Math.PI / 2 + (k === 0 ? -0.25 : 0.25);
+            bullets.push({ x: ship.x + (k === 0 ? -10 : 10), y: ship.y - 8, vx: Math.cos(ang) * 14, vy: Math.sin(ang) * 14, r: bSize + 2, type: "heavy" });
+          }
+        }
       }
 
       // shield/bomb cooldowns + key triggers
