@@ -912,6 +912,7 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
           </div>
           <div className="mt-1 flex gap-4 text-[10px] uppercase tracking-widest text-muted-foreground">
             <span>Wave <span className="text-accent">{localHud.wave}</span></span>
+            <span>Lv <span className="text-accent">{localHud.level ?? 1}</span></span>
             <span>◈ <span className="text-foreground">{localHud.credits}</span></span>
           </div>
         </div>
@@ -934,6 +935,15 @@ function Game({ upgrades, ship: shipDef, onHud, onEnd, onQuit, hud }: any) {
             <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-secondary">
               <div className="h-full transition-all" style={{ width: `${bossPct}%`, background: `linear-gradient(90deg, ${localHud.boss.color}, #f0abfc)` }} />
             </div>
+          </div>
+        </div>
+      )}
+
+      {(localHud.levelUpT ?? 0) > 0 && localHud.levelLabel && (
+        <div className="pointer-events-none absolute inset-x-0 top-1/3 z-20 flex justify-center">
+          <div className="glass rounded-2xl px-8 py-4 text-center neon-glow" style={{ animation: "pulse 1.2s ease-in-out infinite" }}>
+            <div className="text-[10px] uppercase tracking-[0.4em] text-accent">Milestone</div>
+            <div className="font-display text-3xl font-black text-gradient">{localHud.levelLabel}</div>
           </div>
         </div>
       )}
