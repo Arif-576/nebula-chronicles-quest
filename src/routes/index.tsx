@@ -691,9 +691,9 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
           spawnExplosion(boss.x, boss.y, boss.color, 80);
           spawnExplosion(boss.x, boss.y, boss.accent, 60);
           score += 2000 + wave * 100;
-          credits += 200;
           ship.bombs = Math.min(5, ship.bombs + 2);
           for (let k = 0; k < 3; k++) powerups.push({ x: boss.x + (k - 1) * 30, y: boss.y, vx: 0, vy: 1.5, r: 11, type: k === 0 ? "heal" : k === 1 ? "credit" : "bomb" });
+          onBossKilled?.(wave);
           boss = null;
           bossWave = false;
           waveBreak = 2000;
