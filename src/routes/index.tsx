@@ -169,24 +169,49 @@ function BackgroundFX() {
   );
 }
 
-function Menu({ name, setName, onPlay, onLB, up, setUp, shipId, setShipId, onSignOut }: any) {
-  const upgrade = (k: "dmg" | "fire" | "shield") => {
-    const cost = up[k] * 50;
-    if (up.credits < cost) return;
-    setUp({ ...up, [k]: up[k] + 1, credits: up.credits - cost });
-  };
+function Menu({ name, setName, onPlay, onLB, progress, onSignOut }: any) {
+  const p: Progress = progress;
+  const ship = SHIP_BY_ID[p.active_ship as ShipId] ?? SHIPS[0];
+  const region = regionForLevel(p.max_level);
+  const nextLevel = Math.min(MAX_LEVEL, p.max_level);
   return (
     <div className="relative z-10 mx-auto flex h-full max-w-md flex-col items-center gap-5 overflow-y-auto px-6 py-8 text-center">
       <Logo size={76} />
       <div className="inline-flex items-center gap-2 rounded-full glass px-4 py-1.5 text-[10px] uppercase tracking-[0.3em] text-accent">
-        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" /> v3.0 SOVEREIGN · Bosses Online
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" /> v4 SOVEREIGN · 6 Regions · 60 Levels
       </div>
       <h1 className="font-display text-4xl font-black leading-none sm:text-5xl">
         NEBULAR<br /><span className="text-gradient">ECHO</span>
       </h1>
       <p className="text-xs text-muted-foreground">
-        Survive waves, slay Sovereign bosses, harvest cores. Upgrade your fleet. Climb the Cinder Tournament.
+        Push through six regions, slay Sovereign bosses, crack reward boxes, and forge your fleet in the Hangar.
       </p>
+
+      <div className="grid w-full grid-cols-2 gap-2">
+        <div className="glass rounded-xl p-3 text-left">
+          <div className="text-[10px] uppercase tracking-widest text-cyan-300">💎 Diamonds</div>
+          <div className="font-mono text-lg">{p.diamonds.toLocaleString()}</div>
+        </div>
+        <div className="glass rounded-xl p-3 text-left">
+          <div className="text-[10px] uppercase tracking-widest text-amber-300">◈ Coins</div>
+          <div className="font-mono text-lg">{p.coins.toLocaleString()}</div>
+        </div>
+      </div>
+
+      <div className="glass w-full rounded-2xl p-3 text-left">
+        <div className="text-[10px] uppercase tracking-[0.3em]" style={{ color: region.color }}>
+          Sector {region.id} · {region.name}
+        </div>
+        <div className="mt-1 text-[10px] text-muted-foreground">{region.tagline}</div>
+        <div className="mt-2 flex items-center justify-between text-[10px] uppercase tracking-widest text-muted-foreground">
+          <span>Best Level <span className="text-accent">L{p.max_level}/{MAX_LEVEL}</span></span>
+          <span>Best Score <span className="text-accent">{p.best_score.toLocaleString()}</span></span>
+        </div>
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-secondary">
+          <div className="h-full" style={{ width: `${(nextLevel / MAX_LEVEL) * 100}%`, background: `linear-gradient(90deg, ${region.color}, #f0abfc)` }} />
+        </div>
+      </div>
+
       <input
         value={name}
         maxLength={10}
@@ -195,56 +220,22 @@ function Menu({ name, setName, onPlay, onLB, up, setUp, shipId, setShipId, onSig
         placeholder="CALLSIGN"
       />
 
-      <div className="w-full glass rounded-2xl p-3 text-left">
-        <div className="mb-2 px-1 text-[10px] uppercase tracking-[0.3em] text-accent">Select Starfighter</div>
-        <div className="grid grid-cols-3 gap-2">
-          {SHIPS.map((s) => {
-            const sel = shipId === s.id;
-            return (
-              <button
-                key={s.id}
-                onClick={() => setShipId(s.id)}
-                className={`flex flex-col items-center gap-1 rounded-xl border p-2 transition-all ${sel ? "border-accent bg-accent/10 scale-[1.02]" : "border-border bg-secondary/30"}`}
-              >
-                <ShipIcon ship={s} size={32} />
-                <div className="text-[10px] font-display font-black">{s.name}</div>
-                <div className="text-[9px] uppercase tracking-wider text-muted-foreground">{s.tag}</div>
-              </button>
-            );
-          })}
+      <div className="w-full glass rounded-2xl p-3 flex items-center gap-3 text-left">
+        <ShipIcon ship={ship} size={44} />
+        <div className="flex-1">
+          <div className="text-[10px] uppercase tracking-[0.3em] text-accent">Active Frame</div>
+          <div className="font-display text-sm font-black">{ship.name}</div>
+          <div className="text-[10px] text-muted-foreground">{ship.tag}</div>
         </div>
-        <p className="mt-2 px-1 text-[10px] leading-tight text-muted-foreground">
-          {SHIPS.find((s) => s.id === shipId)?.desc}
-        </p>
+        <Link to="/hangar" className="rounded-full bg-gradient-to-r from-cyan-400 to-fuchsia-500 px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-background">
+          Hangar
+        </Link>
       </div>
 
       <button
         onClick={onPlay}
         className="w-full rounded-full bg-gradient-to-r from-fuchsia-500 to-cyan-400 px-8 py-4 font-display text-lg font-black tracking-widest text-background neon-glow transition-transform active:scale-95"
       >▶ LAUNCH</button>
-
-      <div className="w-full glass rounded-2xl p-4 text-left">
-        <div className="mb-3 flex items-center justify-between text-xs uppercase tracking-widest">
-          <span className="text-accent">Forge · Upgrades</span>
-          <span className="font-mono text-foreground">{up.credits} ◈</span>
-        </div>
-        {(["dmg", "fire", "shield"] as const).map((k) => (
-          <button
-            key={k}
-            onClick={() => upgrade(k)}
-            disabled={up.credits < up[k] * 50}
-            className="mb-2 flex w-full items-center justify-between rounded-xl border border-border bg-secondary/40 px-4 py-2 text-sm transition-colors hover:border-accent disabled:opacity-50"
-          >
-            <span className="uppercase tracking-widest text-muted-foreground">
-              {k === "dmg" ? "Damage" : k === "fire" ? "Fire Rate" : "Shield"}
-            </span>
-            <span className="font-mono">Lv {up[k]} · {up[k] * 50}◈</span>
-          </button>
-        ))}
-        <div className="mt-1 px-1 text-[9px] leading-snug text-muted-foreground">
-          ◈ Weapons: L3 lance · L4 wingtips · L5 rail · L6 side beams · L7 rear guard · L8 homing · L9 plasma burst · L10 twin lances
-        </div>
-      </div>
 
       <button onClick={onLB} className="text-xs uppercase tracking-[0.3em] text-muted-foreground hover:text-accent">
         ✦ Leaderboard
