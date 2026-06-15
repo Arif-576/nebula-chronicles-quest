@@ -7,6 +7,7 @@ import { Logo } from "@/components/Logo";
 import { SHIPS, SHIP_BY_ID, type ShipDef, type ShipId } from "@/game/ships";
 import { MAX_LEVEL, regionForLevel, difficulty, bossReward } from "@/game/regions";
 import { loadProgress, saveProgress, shipUpgrades, type Progress } from "@/lib/progress";
+import { ShipIcon as ShipBadge, hullPathPoints } from "@/game/ShipIcon";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -254,35 +255,7 @@ function Menu({ name, setName, onPlay, onLB, progress, onSignOut }: any) {
 }
 
 function ShipIcon({ ship, size = 28 }: { ship: ShipDef; size?: number }) {
-  const s = size / 2;
-  return (
-    <svg width={size} height={size} viewBox={`-${s} -${s} ${size} ${size}`}>
-      <defs>
-        <filter id={`g-${ship.id}`}><feGaussianBlur stdDeviation="0.8" /></filter>
-      </defs>
-      <g filter={`url(#g-${ship.id})`}>
-        {ship.id === "vanguard" && (
-          <polygon points={`0,-${s} ${s*0.85},${s*0.7} 0,${s*0.3} -${s*0.85},${s*0.7}`} fill={ship.color} />
-        )}
-        {ship.id === "phantom" && (
-          <polygon points={`0,-${s} ${s},${s*0.4} ${s*0.4},${s*0.7} -${s*0.4},${s*0.7} -${s},${s*0.4}`} fill={ship.color} />
-        )}
-        {ship.id === "titan" && (
-          <polygon points={`-${s*0.5},-${s*0.8} ${s*0.5},-${s*0.8} ${s},${s*0.5} -${s},${s*0.5}`} fill={ship.color} />
-        )}
-        {ship.id === "spectre" && (
-          <polygon points={`0,-${s} ${s*0.7},0 ${s*0.3},${s*0.8} -${s*0.3},${s*0.8} -${s*0.7},0`} fill={ship.color} />
-        )}
-        {ship.id === "nova" && (
-          <polygon points={`0,-${s} ${s*0.4},-${s*0.2} ${s},${s*0.7} 0,${s*0.4} -${s},${s*0.7} -${s*0.4},-${s*0.2}`} fill={ship.color} />
-        )}
-        {ship.id === "warden" && (
-          <polygon points={`0,-${s*0.95} ${s*0.9},-${s*0.2} ${s*0.7},${s*0.8} -${s*0.7},${s*0.8} -${s*0.9},-${s*0.2}`} fill={ship.color} />
-        )}
-      </g>
-      <circle cx="0" cy="0" r={s * 0.18} fill={ship.accent} />
-    </svg>
-  );
+  return <ShipBadge ship={ship} size={size} />;
 }
 
 function Leaderboard({ lb, onBack }: any) {
