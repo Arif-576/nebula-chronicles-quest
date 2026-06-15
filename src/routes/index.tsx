@@ -559,12 +559,32 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
             bullets.push({ x: ship.x + (k === 0 ? -10 : 10), y: ship.y - 8, vx: Math.cos(ang) * 14, vy: Math.sin(ang) * 14, r: bSize + 2, type: "heavy" });
           }
         }
+        if (upgrades.fire >= 11) {
+          // Flak cone — saturates the lane ahead
+          for (let k = -3; k <= 3; k++) {
+            const a = -Math.PI / 2 + k * 0.13;
+            bullets.push({ x: ship.x, y: ship.y - 18, vx: Math.cos(a) * 13, vy: Math.sin(a) * 13, r: bSize, type: "p" });
+          }
+        }
+        if (upgrades.fire >= 12) {
+          // Annihilator lance — huge piercing core round
+          bullets.push({ x: ship.x, y: ship.y - 24, vx: 0, vy: -18, r: bSize + 5, type: "annihilator" });
+        }
+        // Active overdrive buff (only one at a time)
+        if (ship.overdriveT > 0 && ship.overdriveKind === "rapid") {
+          bullets.push({ x: ship.x - 4, y: ship.y - 12, vx: -1, vy: -15, r: bSize + 1, type: "p" });
+          bullets.push({ x: ship.x + 4, y: ship.y - 12, vx: 1, vy: -15, r: bSize + 1, type: "p" });
+        }
+        if (ship.overdriveT > 0 && ship.overdriveKind === "laser") {
+          bullets.push({ x: ship.x, y: ship.y - 20, vx: 0, vy: -22, r: bSize + 3, type: "annihilator" });
+        }
       }
 
       // shield/bomb cooldowns + key triggers
       if (ship.shieldCD > 0) ship.shieldCD -= dt;
       if (ship.shieldT > 0) ship.shieldT -= dt;
       if (ship.bombCD > 0) ship.bombCD -= dt;
+      if (ship.overdriveT > 0) ship.overdriveT -= dt;
       if (keys["e"]) { shieldBurst(); keys["e"] = false; }
       if (keys["q"]) { novaBomb(); keys["q"] = false; }
 
