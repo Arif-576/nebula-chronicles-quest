@@ -833,46 +833,13 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
       tg.addColorStop(0, shipDef.color); tg.addColorStop(1, "rgba(124,58,237,0)");
       ctx.fillStyle = tg;
       ctx.beginPath(); ctx.moveTo(-6, ship.r); ctx.lineTo(6, ship.r); ctx.lineTo(0, ship.r + 30 * flick); ctx.closePath(); ctx.fill();
-      // body
+      // body — unique hull shape per ship, matches hangar silhouette
       ctx.fillStyle = shipDef.color; ctx.shadowColor = shipDef.color; ctx.shadowBlur = 20;
+      const pts = hullPathPoints(shipDef.id, ship.r);
       ctx.beginPath();
-      if (shipDef.id === "phantom") {
-        ctx.moveTo(0, -ship.r);
-        ctx.lineTo(ship.r, ship.r * 0.5);
-        ctx.lineTo(ship.r * 0.4, ship.r * 0.9);
-        ctx.lineTo(-ship.r * 0.4, ship.r * 0.9);
-        ctx.lineTo(-ship.r, ship.r * 0.5);
-      } else if (shipDef.id === "titan") {
-        ctx.moveTo(-ship.r * 0.5, -ship.r * 0.9);
-        ctx.lineTo(ship.r * 0.5, -ship.r * 0.9);
-        ctx.lineTo(ship.r, ship.r * 0.7);
-        ctx.lineTo(-ship.r, ship.r * 0.7);
-      } else if (shipDef.id === "spectre") {
-        ctx.moveTo(0, -ship.r);
-        ctx.lineTo(ship.r * 0.7, 0);
-        ctx.lineTo(ship.r * 0.3, ship.r * 0.9);
-        ctx.lineTo(-ship.r * 0.3, ship.r * 0.9);
-        ctx.lineTo(-ship.r * 0.7, 0);
-      } else if (shipDef.id === "nova") {
-        ctx.moveTo(0, -ship.r);
-        ctx.lineTo(ship.r * 0.5, -ship.r * 0.2);
-        ctx.lineTo(ship.r, ship.r * 0.8);
-        ctx.lineTo(0, ship.r * 0.4);
-        ctx.lineTo(-ship.r, ship.r * 0.8);
-        ctx.lineTo(-ship.r * 0.5, -ship.r * 0.2);
-      } else if (shipDef.id === "warden") {
-        ctx.moveTo(0, -ship.r);
-        ctx.lineTo(ship.r * 0.95, -ship.r * 0.1);
-        ctx.lineTo(ship.r * 0.75, ship.r * 0.85);
-        ctx.lineTo(-ship.r * 0.75, ship.r * 0.85);
-        ctx.lineTo(-ship.r * 0.95, -ship.r * 0.1);
-      } else {
-        ctx.moveTo(0, -ship.r);
-        ctx.lineTo(ship.r, ship.r * 0.8);
-        ctx.lineTo(0, ship.r * 0.4);
-        ctx.lineTo(-ship.r, ship.r * 0.8);
-      }
+      pts.forEach((p, i) => { if (i === 0) ctx.moveTo(p[0], p[1]); else ctx.lineTo(p[0], p[1]); });
       ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = shipDef.accent; ctx.lineWidth = 1.2; ctx.stroke();
       ctx.shadowBlur = 0;
       ctx.fillStyle = shipDef.accent;
       ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI * 2); ctx.fill();
