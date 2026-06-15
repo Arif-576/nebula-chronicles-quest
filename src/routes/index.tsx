@@ -849,14 +849,26 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
 
       // powerups
       for (const p of powerups) {
-        const col = p.type === "heal" ? "#22d3ee" : "#f0abfc";
+        const col =
+          p.type === "heal"   ? "#22d3ee" :
+          p.type === "bomb"   ? "#fbbf24" :
+          p.type === "rapid"  ? "#f0abfc" :
+          p.type === "pierce" ? "#a3e635" :
+          p.type === "laser"  ? "#fb7185" :
+                                "#facc15";
+        const label =
+          p.type === "heal"   ? "+" :
+          p.type === "bomb"   ? "✸" :
+          p.type === "rapid"  ? "»" :
+          p.type === "pierce" ? "P" :
+          p.type === "laser"  ? "L" : "◈";
         ctx.save();
         ctx.translate(p.x, p.y);
         ctx.rotate(performance.now() / 400);
         ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.shadowColor = col; ctx.shadowBlur = 12;
         ctx.strokeRect(-p.r, -p.r, p.r * 2, p.r * 2);
         ctx.fillStyle = col; ctx.font = "bold 12px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-        ctx.fillText(p.type === "heal" ? "+" : "◈", 0, 1);
+        ctx.fillText(label, 0, 1);
         ctx.restore();
       }
 
