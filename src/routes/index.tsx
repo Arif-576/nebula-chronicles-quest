@@ -1023,6 +1023,14 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
         </div>
       )}
 
+      {(localHud.overdriveT ?? 0) > 0 && localHud.overdriveKind && (
+        <div className="pointer-events-none absolute left-1/2 top-20 z-10 -translate-x-1/2">
+          <div className="glass rounded-full px-4 py-1.5 text-[10px] uppercase tracking-[0.3em] text-fuchsia-300 neon-glow">
+            ⚡ {String(localHud.overdriveKind).toUpperCase()} · {Math.ceil(localHud.overdriveT / 1000)}s
+          </div>
+        </div>
+      )}
+
       <div className="absolute bottom-4 right-4 z-10 flex flex-col gap-2">
         <button
           onClick={() => actionsRef.current?.bomb()}
