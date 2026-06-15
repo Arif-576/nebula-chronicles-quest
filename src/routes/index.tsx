@@ -713,8 +713,12 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
         for (let j = bullets.length - 1; j >= 0; j--) {
           const b = bullets[j];
           if (Math.hypot(e.x - b.x, e.y - b.y) < e.r + b.r) {
-            bullets.splice(j, 1);
-            e.hp! -= 1 * upgrades.dmg;
+            const isAnnihilator = b.type === "annihilator";
+            const isHeavy = b.type === "heavy";
+            const odMul = ship.overdriveT > 0 ? 1.6 : 1;
+            const baseDmg = isAnnihilator ? 6 : isHeavy ? 3 : 1;
+            if (!isAnnihilator) bullets.splice(j, 1); // annihilator pierces
+            e.hp! -= baseDmg * upgrades.dmg * odMul;
             spawnExplosion(b.x, b.y, "#22d3ee", 4);
             if (e.hp! <= 0) {
               spawnExplosion(e.x, e.y, e.type === "tank" ? "#f0abfc" : "#a855f7", 22);
