@@ -787,6 +787,8 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
         region: regionForLevel(wave),
         levelUpT: Math.max(0, ((stateRef.current?.levelUpT ?? 0) as number) - dt),
         levelLabel: stateRef.current?.levelLabel,
+        overdriveT: ship.overdriveT,
+        overdriveKind: ship.overdriveKind,
       };
     };
 
