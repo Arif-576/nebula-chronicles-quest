@@ -1,4 +1,5 @@
 import type { ShipDef } from "@/game/ships";
+import type { ReactNode } from "react";
 
 /**
  * Distinct silhouette per ship. Returns the path commands for the hull
@@ -43,7 +44,7 @@ function hullPath(id: string, s: number): string {
  * Optional accent strokes layered on top of the hull (wing tips, fins,
  * cockpit lines) so similar-shaped ships still look different.
  */
-function accents(id: string, s: number, color: string): JSX.Element | null {
+function accents(id: string, s: number, color: string): ReactNode {
   switch (id) {
     case "interceptor":
       return <line x1={0} y1={-s*0.6} x2={0} y2={s*0.35} stroke={color} strokeWidth={s*0.06} />;
