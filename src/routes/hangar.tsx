@@ -7,6 +7,7 @@ import {
   type Progress,
 } from "@/lib/progress";
 import { Logo } from "@/components/Logo";
+import { ShipIcon } from "@/game/ShipIcon";
 
 export const Route = createFileRoute("/hangar")({
   head: () => ({
@@ -211,20 +212,5 @@ function HangarPage() {
         )}
       </div>
     </div>
-  );
-}
-
-function ShipIcon({ ship, size = 28 }: { ship: ShipDef; size?: number }) {
-  const s = size / 2;
-  return (
-    <svg width={size} height={size} viewBox={`-${s} -${s} ${size} ${size}`}>
-      <defs>
-        <filter id={`g-h-${ship.id}`}><feGaussianBlur stdDeviation="0.8" /></filter>
-      </defs>
-      <g filter={`url(#g-h-${ship.id})`}>
-        <polygon points={`0,-${s} ${s*0.9},${s*0.7} 0,${s*0.35} -${s*0.9},${s*0.7}`} fill={ship.color} />
-      </g>
-      <circle cx="0" cy="0" r={s * 0.18} fill={ship.accent} />
-    </svg>
   );
 }
