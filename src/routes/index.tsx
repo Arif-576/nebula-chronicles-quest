@@ -693,7 +693,13 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
           spawnExplosion(boss.x, boss.y, boss.accent, 60);
           score += 2000 + wave * 100;
           ship.bombs = Math.min(5, ship.bombs + 2);
-          for (let k = 0; k < 3; k++) powerups.push({ x: boss.x + (k - 1) * 30, y: boss.y, vx: 0, vy: 1.5, r: 11, type: k === 0 ? "heal" : k === 1 ? "credit" : "bomb" });
+          // Boss drop: heal, bomb, and a weapon-overdrive pickup (only one
+          // overdrive can be active at a time — picking refreshes/replaces).
+          const odKinds = ["rapid", "pierce", "laser"] as const;
+          const od = odKinds[Math.floor(Math.random() * odKinds.length)];
+          powerups.push({ x: boss.x - 36, y: boss.y, vx: 0, vy: 1.5, r: 11, type: "heal" });
+          powerups.push({ x: boss.x,      y: boss.y, vx: 0, vy: 1.4, r: 13, type: od });
+          powerups.push({ x: boss.x + 36, y: boss.y, vx: 0, vy: 1.5, r: 11, type: "bomb" });
           onBossKilled?.(wave);
           boss = null;
           bossWave = false;
