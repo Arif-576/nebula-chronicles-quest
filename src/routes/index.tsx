@@ -651,8 +651,10 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
         for (let j = bullets.length - 1; j >= 0; j--) {
           const b = bullets[j];
           if (Math.hypot(boss.x - b.x, boss.y - b.y) < boss.r + b.r) {
-            bullets.splice(j, 1);
-            const dmg = (b.type === "heavy" ? 3 : 1) * upgrades.dmg;
+            const isAnnihilator = b.type === "annihilator";
+            if (!isAnnihilator) bullets.splice(j, 1);
+            const odMul = ship.overdriveT > 0 ? 1.6 : 1;
+            const dmg = (isAnnihilator ? 7 : b.type === "heavy" ? 3 : 1) * upgrades.dmg * odMul;
             boss.hp -= dmg;
             spawnExplosion(b.x, b.y, boss.accent, 4);
           }
