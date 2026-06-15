@@ -627,6 +627,11 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
           if (p.type === "heal") ship.hp = Math.min(ship.maxHp, ship.hp + 30);
           else if (p.type === "credit") credits += 25;
           else if (p.type === "bomb") ship.bombs = Math.min(5, ship.bombs + 1);
+          else if (p.type === "rapid" || p.type === "pierce" || p.type === "laser") {
+            // Refined: only ONE timed buff active. Picking a new one replaces it.
+            ship.overdriveT = 7000;
+            ship.overdriveKind = p.type;
+          }
           powerups.splice(i, 1);
           spawnExplosion(p.x, p.y, p.type === "heal" ? "#22d3ee" : p.type === "bomb" ? "#fbbf24" : "#f0abfc", 8);
         } else if (p.y > H + 20) powerups.splice(i, 1);
