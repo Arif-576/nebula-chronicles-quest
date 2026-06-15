@@ -397,11 +397,12 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
     }));
 
     const baseHp = 100 * upgrades.shield * shipDef.hpMul;
-    const ship = {
+    const ship: any = {
       x: W / 2, y: H - 100,
       r: shipDef.id === "titan" ? 17 : shipDef.id === "phantom" ? 12 : 14,
       hp: baseHp, maxHp: baseHp, cool: 0, inv: 0,
       shieldT: 0, shieldCD: 0, bombs: 1, bombCD: 0,
+      overdriveT: 0, overdriveKind: "" as "" | "rapid" | "pierce" | "laser",
     };
     const bullets: Entity[] = [];
     const enemies: Entity[] = [];
