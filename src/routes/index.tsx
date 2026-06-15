@@ -7,6 +7,7 @@ import { Logo } from "@/components/Logo";
 import { SHIPS, SHIP_BY_ID, type ShipDef, type ShipId } from "@/game/ships";
 import { MAX_LEVEL, regionForLevel, difficulty, bossReward } from "@/game/regions";
 import { loadProgress, saveProgress, shipUpgrades, type Progress } from "@/lib/progress";
+import { ShipIcon as ShipBadge, hullPathPoints } from "@/game/ShipIcon";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -254,35 +255,7 @@ function Menu({ name, setName, onPlay, onLB, progress, onSignOut }: any) {
 }
 
 function ShipIcon({ ship, size = 28 }: { ship: ShipDef; size?: number }) {
-  const s = size / 2;
-  return (
-    <svg width={size} height={size} viewBox={`-${s} -${s} ${size} ${size}`}>
-      <defs>
-        <filter id={`g-${ship.id}`}><feGaussianBlur stdDeviation="0.8" /></filter>
-      </defs>
-      <g filter={`url(#g-${ship.id})`}>
-        {ship.id === "vanguard" && (
-          <polygon points={`0,-${s} ${s*0.85},${s*0.7} 0,${s*0.3} -${s*0.85},${s*0.7}`} fill={ship.color} />
-        )}
-        {ship.id === "phantom" && (
-          <polygon points={`0,-${s} ${s},${s*0.4} ${s*0.4},${s*0.7} -${s*0.4},${s*0.7} -${s},${s*0.4}`} fill={ship.color} />
-        )}
-        {ship.id === "titan" && (
-          <polygon points={`-${s*0.5},-${s*0.8} ${s*0.5},-${s*0.8} ${s},${s*0.5} -${s},${s*0.5}`} fill={ship.color} />
-        )}
-        {ship.id === "spectre" && (
-          <polygon points={`0,-${s} ${s*0.7},0 ${s*0.3},${s*0.8} -${s*0.3},${s*0.8} -${s*0.7},0`} fill={ship.color} />
-        )}
-        {ship.id === "nova" && (
-          <polygon points={`0,-${s} ${s*0.4},-${s*0.2} ${s},${s*0.7} 0,${s*0.4} -${s},${s*0.7} -${s*0.4},-${s*0.2}`} fill={ship.color} />
-        )}
-        {ship.id === "warden" && (
-          <polygon points={`0,-${s*0.95} ${s*0.9},-${s*0.2} ${s*0.7},${s*0.8} -${s*0.7},${s*0.8} -${s*0.9},-${s*0.2}`} fill={ship.color} />
-        )}
-      </g>
-      <circle cx="0" cy="0" r={s * 0.18} fill={ship.accent} />
-    </svg>
-  );
+  return <ShipBadge ship={ship} size={size} />;
 }
 
 function Leaderboard({ lb, onBack }: any) {
@@ -424,11 +397,12 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
     }));
 
     const baseHp = 100 * upgrades.shield * shipDef.hpMul;
-    const ship = {
+    const ship: any = {
       x: W / 2, y: H - 100,
       r: shipDef.id === "titan" ? 17 : shipDef.id === "phantom" ? 12 : 14,
       hp: baseHp, maxHp: baseHp, cool: 0, inv: 0,
       shieldT: 0, shieldCD: 0, bombs: 1, bombCD: 0,
+      overdriveT: 0, overdriveKind: "" as "" | "rapid" | "pierce" | "laser",
     };
     const bullets: Entity[] = [];
     const enemies: Entity[] = [];
@@ -585,12 +559,32 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
             bullets.push({ x: ship.x + (k === 0 ? -10 : 10), y: ship.y - 8, vx: Math.cos(ang) * 14, vy: Math.sin(ang) * 14, r: bSize + 2, type: "heavy" });
           }
         }
+        if (upgrades.fire >= 11) {
+          // Flak cone — saturates the lane ahead
+          for (let k = -3; k <= 3; k++) {
+            const a = -Math.PI / 2 + k * 0.13;
+            bullets.push({ x: ship.x, y: ship.y - 18, vx: Math.cos(a) * 13, vy: Math.sin(a) * 13, r: bSize, type: "p" });
+          }
+        }
+        if (upgrades.fire >= 12) {
+          // Annihilator lance — huge piercing core round
+          bullets.push({ x: ship.x, y: ship.y - 24, vx: 0, vy: -18, r: bSize + 5, type: "annihilator" });
+        }
+        // Active overdrive buff (only one at a time)
+        if (ship.overdriveT > 0 && ship.overdriveKind === "rapid") {
+          bullets.push({ x: ship.x - 4, y: ship.y - 12, vx: -1, vy: -15, r: bSize + 1, type: "p" });
+          bullets.push({ x: ship.x + 4, y: ship.y - 12, vx: 1, vy: -15, r: bSize + 1, type: "p" });
+        }
+        if (ship.overdriveT > 0 && ship.overdriveKind === "laser") {
+          bullets.push({ x: ship.x, y: ship.y - 20, vx: 0, vy: -22, r: bSize + 3, type: "annihilator" });
+        }
       }
 
       // shield/bomb cooldowns + key triggers
       if (ship.shieldCD > 0) ship.shieldCD -= dt;
       if (ship.shieldT > 0) ship.shieldT -= dt;
       if (ship.bombCD > 0) ship.bombCD -= dt;
+      if (ship.overdriveT > 0) ship.overdriveT -= dt;
       if (keys["e"]) { shieldBurst(); keys["e"] = false; }
       if (keys["q"]) { novaBomb(); keys["q"] = false; }
 
@@ -633,6 +627,11 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
           if (p.type === "heal") ship.hp = Math.min(ship.maxHp, ship.hp + 30);
           else if (p.type === "credit") credits += 25;
           else if (p.type === "bomb") ship.bombs = Math.min(5, ship.bombs + 1);
+          else if (p.type === "rapid" || p.type === "pierce" || p.type === "laser") {
+            // Refined: only ONE timed buff active. Picking a new one replaces it.
+            ship.overdriveT = 7000;
+            ship.overdriveKind = p.type;
+          }
           powerups.splice(i, 1);
           spawnExplosion(p.x, p.y, p.type === "heal" ? "#22d3ee" : p.type === "bomb" ? "#fbbf24" : "#f0abfc", 8);
         } else if (p.y > H + 20) powerups.splice(i, 1);
@@ -678,8 +677,10 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
         for (let j = bullets.length - 1; j >= 0; j--) {
           const b = bullets[j];
           if (Math.hypot(boss.x - b.x, boss.y - b.y) < boss.r + b.r) {
-            bullets.splice(j, 1);
-            const dmg = (b.type === "heavy" ? 3 : 1) * upgrades.dmg;
+            const isAnnihilator = b.type === "annihilator";
+            if (!isAnnihilator) bullets.splice(j, 1);
+            const odMul = ship.overdriveT > 0 ? 1.6 : 1;
+            const dmg = (isAnnihilator ? 7 : b.type === "heavy" ? 3 : 1) * upgrades.dmg * odMul;
             boss.hp -= dmg;
             spawnExplosion(b.x, b.y, boss.accent, 4);
           }
@@ -692,7 +693,13 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
           spawnExplosion(boss.x, boss.y, boss.accent, 60);
           score += 2000 + wave * 100;
           ship.bombs = Math.min(5, ship.bombs + 2);
-          for (let k = 0; k < 3; k++) powerups.push({ x: boss.x + (k - 1) * 30, y: boss.y, vx: 0, vy: 1.5, r: 11, type: k === 0 ? "heal" : k === 1 ? "credit" : "bomb" });
+          // Boss drop: heal, bomb, and a weapon-overdrive pickup (only one
+          // overdrive can be active at a time — picking refreshes/replaces).
+          const odKinds = ["rapid", "pierce", "laser"] as const;
+          const od = odKinds[Math.floor(Math.random() * odKinds.length)];
+          powerups.push({ x: boss.x - 36, y: boss.y, vx: 0, vy: 1.5, r: 11, type: "heal" });
+          powerups.push({ x: boss.x,      y: boss.y, vx: 0, vy: 1.4, r: 13, type: od });
+          powerups.push({ x: boss.x + 36, y: boss.y, vx: 0, vy: 1.5, r: 11, type: "bomb" });
           onBossKilled?.(wave);
           boss = null;
           bossWave = false;
@@ -706,8 +713,12 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
         for (let j = bullets.length - 1; j >= 0; j--) {
           const b = bullets[j];
           if (Math.hypot(e.x - b.x, e.y - b.y) < e.r + b.r) {
-            bullets.splice(j, 1);
-            e.hp! -= 1 * upgrades.dmg;
+            const isAnnihilator = b.type === "annihilator";
+            const isHeavy = b.type === "heavy";
+            const odMul = ship.overdriveT > 0 ? 1.6 : 1;
+            const baseDmg = isAnnihilator ? 6 : isHeavy ? 3 : 1;
+            if (!isAnnihilator) bullets.splice(j, 1); // annihilator pierces
+            e.hp! -= baseDmg * upgrades.dmg * odMul;
             spawnExplosion(b.x, b.y, "#22d3ee", 4);
             if (e.hp! <= 0) {
               spawnExplosion(e.x, e.y, e.type === "tank" ? "#f0abfc" : "#a855f7", 22);
@@ -776,6 +787,8 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
         region: regionForLevel(wave),
         levelUpT: Math.max(0, ((stateRef.current?.levelUpT ?? 0) as number) - dt),
         levelLabel: stateRef.current?.levelLabel,
+        overdriveT: ship.overdriveT,
+        overdriveKind: ship.overdriveKind,
       };
     };
 
@@ -838,14 +851,26 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
 
       // powerups
       for (const p of powerups) {
-        const col = p.type === "heal" ? "#22d3ee" : "#f0abfc";
+        const col =
+          p.type === "heal"   ? "#22d3ee" :
+          p.type === "bomb"   ? "#fbbf24" :
+          p.type === "rapid"  ? "#f0abfc" :
+          p.type === "pierce" ? "#a3e635" :
+          p.type === "laser"  ? "#fb7185" :
+                                "#facc15";
+        const label =
+          p.type === "heal"   ? "+" :
+          p.type === "bomb"   ? "✸" :
+          p.type === "rapid"  ? "»" :
+          p.type === "pierce" ? "P" :
+          p.type === "laser"  ? "L" : "◈";
         ctx.save();
         ctx.translate(p.x, p.y);
         ctx.rotate(performance.now() / 400);
         ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.shadowColor = col; ctx.shadowBlur = 12;
         ctx.strokeRect(-p.r, -p.r, p.r * 2, p.r * 2);
         ctx.fillStyle = col; ctx.font = "bold 12px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-        ctx.fillText(p.type === "heal" ? "+" : "◈", 0, 1);
+        ctx.fillText(label, 0, 1);
         ctx.restore();
       }
 
@@ -860,46 +885,13 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
       tg.addColorStop(0, shipDef.color); tg.addColorStop(1, "rgba(124,58,237,0)");
       ctx.fillStyle = tg;
       ctx.beginPath(); ctx.moveTo(-6, ship.r); ctx.lineTo(6, ship.r); ctx.lineTo(0, ship.r + 30 * flick); ctx.closePath(); ctx.fill();
-      // body
+      // body — unique hull shape per ship, matches hangar silhouette
       ctx.fillStyle = shipDef.color; ctx.shadowColor = shipDef.color; ctx.shadowBlur = 20;
+      const pts = hullPathPoints(shipDef.id, ship.r);
       ctx.beginPath();
-      if (shipDef.id === "phantom") {
-        ctx.moveTo(0, -ship.r);
-        ctx.lineTo(ship.r, ship.r * 0.5);
-        ctx.lineTo(ship.r * 0.4, ship.r * 0.9);
-        ctx.lineTo(-ship.r * 0.4, ship.r * 0.9);
-        ctx.lineTo(-ship.r, ship.r * 0.5);
-      } else if (shipDef.id === "titan") {
-        ctx.moveTo(-ship.r * 0.5, -ship.r * 0.9);
-        ctx.lineTo(ship.r * 0.5, -ship.r * 0.9);
-        ctx.lineTo(ship.r, ship.r * 0.7);
-        ctx.lineTo(-ship.r, ship.r * 0.7);
-      } else if (shipDef.id === "spectre") {
-        ctx.moveTo(0, -ship.r);
-        ctx.lineTo(ship.r * 0.7, 0);
-        ctx.lineTo(ship.r * 0.3, ship.r * 0.9);
-        ctx.lineTo(-ship.r * 0.3, ship.r * 0.9);
-        ctx.lineTo(-ship.r * 0.7, 0);
-      } else if (shipDef.id === "nova") {
-        ctx.moveTo(0, -ship.r);
-        ctx.lineTo(ship.r * 0.5, -ship.r * 0.2);
-        ctx.lineTo(ship.r, ship.r * 0.8);
-        ctx.lineTo(0, ship.r * 0.4);
-        ctx.lineTo(-ship.r, ship.r * 0.8);
-        ctx.lineTo(-ship.r * 0.5, -ship.r * 0.2);
-      } else if (shipDef.id === "warden") {
-        ctx.moveTo(0, -ship.r);
-        ctx.lineTo(ship.r * 0.95, -ship.r * 0.1);
-        ctx.lineTo(ship.r * 0.75, ship.r * 0.85);
-        ctx.lineTo(-ship.r * 0.75, ship.r * 0.85);
-        ctx.lineTo(-ship.r * 0.95, -ship.r * 0.1);
-      } else {
-        ctx.moveTo(0, -ship.r);
-        ctx.lineTo(ship.r, ship.r * 0.8);
-        ctx.lineTo(0, ship.r * 0.4);
-        ctx.lineTo(-ship.r, ship.r * 0.8);
-      }
+      pts.forEach((p, i) => { if (i === 0) ctx.moveTo(p[0], p[1]); else ctx.lineTo(p[0], p[1]); });
       ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = shipDef.accent; ctx.lineWidth = 1.2; ctx.stroke();
       ctx.shadowBlur = 0;
       ctx.fillStyle = shipDef.accent;
       ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI * 2); ctx.fill();
@@ -1027,6 +1019,14 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
           <div className="glass rounded-2xl px-8 py-4 text-center neon-glow" style={{ animation: "pulse 1.2s ease-in-out infinite" }}>
             <div className="text-[10px] uppercase tracking-[0.4em] text-accent">Milestone</div>
             <div className="font-display text-3xl font-black text-gradient">{localHud.levelLabel}</div>
+          </div>
+        </div>
+      )}
+
+      {(localHud.overdriveT ?? 0) > 0 && localHud.overdriveKind && (
+        <div className="pointer-events-none absolute left-1/2 top-20 z-10 -translate-x-1/2">
+          <div className="glass rounded-full px-4 py-1.5 text-[10px] uppercase tracking-[0.3em] text-fuchsia-300 neon-glow">
+            ⚡ {String(localHud.overdriveKind).toUpperCase()} · {Math.ceil(localHud.overdriveT / 1000)}s
           </div>
         </div>
       )}
