@@ -1089,6 +1089,7 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
       <button onClick={onQuit} className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-full glass px-4 py-2 text-xs uppercase tracking-widest hover:text-accent">
         Eject
       </button>
+      <MuteButton />
 
       {localHud.boss && (
         <div className="pointer-events-none absolute inset-x-0 top-20 z-10 mx-auto max-w-md px-4">
