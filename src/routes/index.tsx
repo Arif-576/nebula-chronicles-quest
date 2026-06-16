@@ -473,6 +473,7 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
         t: 0, fireT: 600, name: def.name, color: def.color, accent: def.accent, dashCD: 4000,
       };
       bossIntroT = 1200;
+      sfx.bossSpawn();
     };
 
     const novaBomb = () => {
@@ -664,6 +665,7 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
       for (let i = powerups.length - 1; i >= 0; i--) {
         const p = powerups[i]; p.y += p.vy;
         if (Math.hypot(p.x - ship.x, p.y - ship.y) < ship.r + p.r) {
+          sfx.powerup();
           if (p.type === "heal") ship.hp = Math.min(ship.maxHp, ship.hp + 30);
           else if (p.type === "credit") credits += 25;
           else if (p.type === "bomb") ship.bombs = Math.min(5, ship.bombs + 1);
@@ -726,9 +728,10 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
           }
         }
         if (Math.hypot(boss.x - ship.x, boss.y - ship.y) < boss.r + ship.r) {
-          if (ship.shieldT <= 0 && ship.inv <= 0) { ship.hp -= 30; ship.inv = 500; spawnExplosion(ship.x, ship.y, boss.color, 16); }
+          if (ship.shieldT <= 0 && ship.inv <= 0) { ship.hp -= 30; ship.inv = 500; spawnExplosion(ship.x, ship.y, boss.color, 16); sfx.playerHit(); }
         }
         if (boss.hp <= 0) {
+          sfx.bossKill();
           spawnExplosion(boss.x, boss.y, boss.color, 80);
           spawnExplosion(boss.x, boss.y, boss.accent, 60);
           score += 2000 + wave * 100;
@@ -761,6 +764,7 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
             e.hp! -= baseDmg * upgrades.dmg * odMul;
             spawnExplosion(b.x, b.y, "#22d3ee", 4);
             if (e.hp! <= 0) {
+              sfx.enemyKill();
               spawnExplosion(e.x, e.y, e.type === "tank" ? "#f0abfc" : "#a855f7", 22);
               const base = e.type === "tank" ? 220 : e.type === "fast" ? 80 : e.type === "weaver" ? 140 : e.type === "splitter" ? 180 : 100;
               combo++; comboT = 1600; comboBest = Math.max(comboBest, combo);
@@ -768,7 +772,7 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
               const reward = Math.round(base * mult);
               score += reward;
               addFloat(e.x, e.y - 6, `+${reward}`, combo >= 5 ? "#facc15" : "#22d3ee");
-              if (combo >= 5 && combo % 5 === 0) addFloat(e.x, e.y - 22, `x${combo} COMBO`, "#f0abfc");
+              if (combo >= 5 && combo % 5 === 0) { addFloat(e.x, e.y - 22, `x${combo} COMBO`, "#f0abfc"); sfx.combo(); }
               if (e.type === "tank") addShake(8, 260);
               else addShake(3, 120);
               // Splitter spawns two faster shards on death.
@@ -795,7 +799,7 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
         if (Math.hypot(b.x - ship.x, b.y - ship.y) < ship.r + b.r) {
           ebullets.splice(i, 1);
           if (ship.shieldT > 0) { spawnExplosion(b.x, b.y, "#22d3ee", 6); }
-          else if (ship.inv <= 0) { ship.hp -= 12; ship.inv = 300; spawnExplosion(ship.x, ship.y, "#fb7185", 10); }
+          else if (ship.inv <= 0) { ship.hp -= 12; ship.inv = 300; spawnExplosion(ship.x, ship.y, "#fb7185", 10); sfx.playerHit(); }
         }
       }
       // ram
@@ -803,7 +807,7 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
         const e = enemies[i];
         if (Math.hypot(e.x - ship.x, e.y - ship.y) < e.r + ship.r) {
           enemies.splice(i, 1); spawnExplosion(e.x, e.y, "#f0abfc", 20);
-          if (ship.shieldT <= 0 && ship.inv <= 0) { ship.hp -= 20; ship.inv = 400; }
+          if (ship.shieldT <= 0 && ship.inv <= 0) { ship.hp -= 20; ship.inv = 400; sfx.playerHit(); }
         }
       }
 
@@ -833,6 +837,7 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
         cancelAnimationFrame(raf);
         addShake(18, 600);
         spawnExplosion(ship.x, ship.y, "#f0abfc", 60);
+        sfx.gameOver();
         setTimeout(() => onEnd(Math.floor(score), wave, credits), 300);
       }
 
