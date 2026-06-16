@@ -346,6 +346,8 @@ function RewardBox({ reward, onClaim }: { reward: { diamonds: number; coins: num
 }
 
 function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, startLevel, hud }: any) {
+  // mute toggle state synced with localStorage
+  // (defined inline in MuteButton)
   // Derive legacy "upgrades" shape from cloud progress + ship upgrades.
   const su = shipUpgrades(progress as Progress, shipDef.id as ShipId);
   const upgrades = {
