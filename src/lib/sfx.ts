@@ -15,10 +15,12 @@ function ac(): AudioContext | null {
   if (!ctx) {
     const AC = (window as any).AudioContext || (window as any).webkitAudioContext;
     if (!AC) return null;
-    ctx = new AC();
-    master = ctx.createGain();
-    master.gain.value = 0.35;
-    master.connect(ctx.destination);
+    const c: AudioContext = new AC();
+    ctx = c;
+    const m = c.createGain();
+    m.gain.value = 0.35;
+    m.connect(c.destination);
+    master = m;
   }
   if (ctx.state === "suspended") ctx.resume().catch(() => {});
   return ctx;
