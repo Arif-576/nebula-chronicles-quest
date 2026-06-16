@@ -418,6 +418,14 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
     let last = performance.now();
     let raf = 0;
     let running = true;
+    // Combo system: chained kills within ~1.6s multiply score and feel great.
+    let combo = 0, comboT = 0, comboBest = 0;
+    let shakeT = 0, shakeMag = 0;
+    const addShake = (mag: number, dur = 220) => { shakeMag = Math.max(shakeMag, mag); shakeT = Math.max(shakeT, dur); };
+    let floats: { x: number; y: number; vy: number; t: number; text: string; color: string }[] = [];
+    const addFloat = (x: number, y: number, text: string, color: string) => {
+      floats.push({ x, y, vy: -1.2, t: 900, text, color });
+    };
 
     const spawnExplosion = (x: number, y: number, color: string, n = 18) => {
       for (let i = 0; i < n; i++) {
@@ -429,11 +437,18 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
 
     const spawnEnemy = () => {
       const r = Math.random();
-      const type = r < 0.7 ? "grunt" : r < 0.92 ? "fast" : "tank";
-      const radius = type === "tank" ? 26 : type === "fast" ? 12 : 18;
+      // Unlock more variety as the player advances.
+      let type: string;
+      if (wave >= 8 && r < 0.18) type = "weaver";
+      else if (wave >= 14 && r < 0.27) type = "splitter";
+      else if (r < 0.55) type = "grunt";
+      else if (r < 0.82) type = "fast";
+      else type = "tank";
+      const radius = type === "tank" ? 26 : type === "fast" ? 12 : type === "weaver" ? 14 : type === "splitter" ? 20 : 18;
       const diff = difficulty(wave);
-      const hp = Math.max(1, Math.round((type === "tank" ? 6 : type === "fast" ? 1 : 2) * diff.enemyHp));
-      const baseVy = type === "fast" ? 2.5 : type === "tank" ? 0.7 : 1.4;
+      const hpBase = type === "tank" ? 7 : type === "fast" ? 1 : type === "weaver" ? 2 : type === "splitter" ? 4 : 2;
+      const hp = Math.max(1, Math.round(hpBase * diff.enemyHp));
+      const baseVy = type === "fast" ? 2.6 : type === "tank" ? 0.75 : type === "weaver" ? 1.6 : type === "splitter" ? 1.1 : 1.45;
       const vy = baseVy * diff.enemySpeed;
       enemies.push({ x: 40 + Math.random() * (W - 80), y: -30, vx: (Math.random() - 0.5) * 0.6, vy, r: radius, hp, type, t: 0 });
     };
@@ -606,12 +621,24 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
       // enemies
       for (let i = enemies.length - 1; i >= 0; i--) {
         const e = enemies[i]; e.t = (e.t || 0) + dt;
+        if (e.type === "weaver") {
+          e.vx = Math.sin((e.t || 0) / 280) * 2.6;
+        }
         e.x += e.vx; e.y += e.vy;
         if (e.x < e.r || e.x > W - e.r) e.vx *= -1;
-        // fire
-        if (e.type !== "fast" && Math.random() < difficulty(wave).enemyFire) {
+        // fire — tanks now fire bursts; everything but pure-fast can shoot.
+        const diff = difficulty(wave);
+        if (e.type !== "fast" && Math.random() < diff.enemyFire) {
           const ang = Math.atan2(ship.y - e.y, ship.x - e.x);
-          ebullets.push({ x: e.x, y: e.y, vx: Math.cos(ang) * 4, vy: Math.sin(ang) * 4, r: 4 });
+          const bs = 4 * diff.bulletSpeed;
+          if (e.type === "tank") {
+            for (let k = -1; k <= 1; k++) {
+              const a = ang + k * 0.18;
+              ebullets.push({ x: e.x, y: e.y, vx: Math.cos(a) * bs, vy: Math.sin(a) * bs, r: 5 });
+            }
+          } else {
+            ebullets.push({ x: e.x, y: e.y, vx: Math.cos(ang) * bs, vy: Math.sin(ang) * bs, r: 4 });
+          }
         }
         if (e.y > H + 40) enemies.splice(i, 1);
       }
@@ -620,6 +647,15 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
         const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vx *= 0.96; p.vy *= 0.96; p.t! -= 0.02;
         if (p.t! <= 0) particles.splice(i, 1);
       }
+      // floating text
+      for (let i = floats.length - 1; i >= 0; i--) {
+        const f = floats[i]; f.y += f.vy; f.vy *= 0.97; f.t -= dt;
+        if (f.t <= 0) floats.splice(i, 1);
+      }
+      // combo timer
+      if (comboT > 0) { comboT -= dt; if (comboT <= 0) combo = 0; }
+      // screen shake decay
+      if (shakeT > 0) { shakeT -= dt; if (shakeT <= 0) shakeMag = 0; }
       // powerups
       for (let i = powerups.length - 1; i >= 0; i--) {
         const p = powerups[i]; p.y += p.vy;
@@ -722,9 +758,26 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
             spawnExplosion(b.x, b.y, "#22d3ee", 4);
             if (e.hp! <= 0) {
               spawnExplosion(e.x, e.y, e.type === "tank" ? "#f0abfc" : "#a855f7", 22);
-              const reward = e.type === "tank" ? 200 : e.type === "fast" ? 80 : 100;
+              const base = e.type === "tank" ? 220 : e.type === "fast" ? 80 : e.type === "weaver" ? 140 : e.type === "splitter" ? 180 : 100;
+              combo++; comboT = 1600; comboBest = Math.max(comboBest, combo);
+              const mult = 1 + Math.min(combo, 30) * 0.1;
+              const reward = Math.round(base * mult);
               score += reward;
-              if (Math.random() < 0.15) powerups.push({ x: e.x, y: e.y, vx: 0, vy: 1.5, r: 10, type: Math.random() < 0.5 ? "heal" : "credit" });
+              addFloat(e.x, e.y - 6, `+${reward}`, combo >= 5 ? "#facc15" : "#22d3ee");
+              if (combo >= 5 && combo % 5 === 0) addFloat(e.x, e.y - 22, `x${combo} COMBO`, "#f0abfc");
+              if (e.type === "tank") addShake(8, 260);
+              else addShake(3, 120);
+              // Splitter spawns two faster shards on death.
+              if (e.type === "splitter") {
+                for (let k = -1; k <= 1; k += 2) {
+                  enemies.push({
+                    x: e.x, y: e.y, vx: k * 1.6, vy: 1.8 * difficulty(wave).enemySpeed,
+                    r: 11, hp: Math.max(1, Math.round(1 * difficulty(wave).enemyHp)),
+                    type: "fast", t: 0,
+                  });
+                }
+              }
+              if (Math.random() < 0.18) powerups.push({ x: e.x, y: e.y, vx: 0, vy: 1.5, r: 10, type: Math.random() < 0.5 ? "heal" : "credit" });
               enemies.splice(i, 1);
               break;
             }
@@ -774,6 +827,7 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
       if (ship.hp <= 0) {
         running = false;
         cancelAnimationFrame(raf);
+        addShake(18, 600);
         spawnExplosion(ship.x, ship.y, "#f0abfc", 60);
         setTimeout(() => onEnd(Math.floor(score), wave, credits), 300);
       }
@@ -789,10 +843,18 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
         levelLabel: stateRef.current?.levelLabel,
         overdriveT: ship.overdriveT,
         overdriveKind: ship.overdriveKind,
+        combo,
+        comboBest,
+        comboT,
       };
     };
 
     const render = () => {
+      ctx.save();
+      if (shakeMag > 0) {
+        const k = shakeMag * (shakeT / 220);
+        ctx.translate((Math.random() - 0.5) * k, (Math.random() - 0.5) * k);
+      }
       ctx.fillStyle = "rgba(10, 4, 28, 0.35)";
       ctx.fillRect(0, 0, W, H);
 
@@ -831,7 +893,12 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
 
       // enemies
       for (const e of enemies) {
-        const col = e.type === "tank" ? "#f0abfc" : e.type === "fast" ? "#a855f7" : "#7c3aed";
+        const col =
+          e.type === "tank" ? "#f0abfc" :
+          e.type === "fast" ? "#a855f7" :
+          e.type === "weaver" ? "#a3e635" :
+          e.type === "splitter" ? "#fb923c" :
+          "#7c3aed";
         ctx.save();
         ctx.translate(e.x, e.y);
         ctx.rotate(Math.sin((e.t || 0) / 200) * 0.2);
@@ -940,6 +1007,19 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
         ctx.fillStyle = `rgba(34,211,238,${(ship.bombCD - 700) / 200})`;
         ctx.fillRect(0, 0, W, H);
       }
+
+      // floating text (score pops)
+      for (const f of floats) {
+        ctx.globalAlpha = Math.max(0, Math.min(1, f.t / 600));
+        ctx.fillStyle = f.color;
+        ctx.font = "bold 13px ui-monospace, monospace";
+        ctx.textAlign = "center";
+        ctx.shadowColor = f.color; ctx.shadowBlur = 10;
+        ctx.fillText(f.text, f.x, f.y);
+        ctx.shadowBlur = 0;
+      }
+      ctx.globalAlpha = 1;
+      ctx.restore();
     };
 
     const loop = (now: number) => {
