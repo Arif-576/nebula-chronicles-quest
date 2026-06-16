@@ -8,6 +8,7 @@ import { SHIPS, SHIP_BY_ID, type ShipDef, type ShipId } from "@/game/ships";
 import { MAX_LEVEL, regionForLevel, difficulty, bossReward } from "@/game/regions";
 import { loadProgress, saveProgress, shipUpgrades, type Progress } from "@/lib/progress";
 import { ShipIcon as ShipBadge, hullPathPoints } from "@/game/ShipIcon";
+import { sfx, initAudio, isMuted, toggleMuted } from "@/lib/sfx";
 
 export const Route = createFileRoute("/")({
   head: () => ({
