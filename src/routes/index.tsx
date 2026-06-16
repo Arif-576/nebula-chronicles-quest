@@ -350,7 +350,7 @@ function MuteButton() {
   return (
     <button
       onClick={() => { initAudio(); setM(toggleMuted()); }}
-      className="absolute right-4 top-4 z-20 rounded-full glass px-3 py-2 text-xs font-mono uppercase tracking-widest hover:text-accent"
+      className="absolute right-4 bottom-4 z-20 rounded-full glass px-3 py-2 text-xs font-mono uppercase tracking-widest hover:text-accent"
       aria-label={m ? "Unmute" : "Mute"}
       title={m ? "Unmute" : "Mute"}
     >
