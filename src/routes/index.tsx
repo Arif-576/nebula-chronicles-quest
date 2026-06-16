@@ -1111,6 +1111,18 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
         </div>
       )}
 
+      {(localHud.combo ?? 0) >= 2 && (
+        <div className="pointer-events-none absolute right-4 top-24 z-10">
+          <div className="glass rounded-2xl px-3 py-1.5 text-right">
+            <div className="font-display text-xl font-black text-gradient leading-none">x{localHud.combo}</div>
+            <div className="text-[9px] uppercase tracking-widest text-muted-foreground">Combo</div>
+            <div className="mt-1 h-1 w-16 overflow-hidden rounded-full bg-secondary">
+              <div className="h-full bg-gradient-to-r from-fuchsia-500 to-amber-300" style={{ width: `${Math.max(0, Math.min(100, ((localHud.comboT ?? 0) / 1600) * 100))}%` }} />
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="absolute bottom-4 right-4 z-10 flex flex-col gap-2">
         <button
           onClick={() => actionsRef.current?.bomb()}
