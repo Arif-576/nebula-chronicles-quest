@@ -345,6 +345,20 @@ function RewardBox({ reward, onClaim }: { reward: { diamonds: number; coins: num
   );
 }
 
+function MuteButton() {
+  const [m, setM] = useState(isMuted());
+  return (
+    <button
+      onClick={() => { initAudio(); setM(toggleMuted()); }}
+      className="absolute right-4 top-4 z-20 rounded-full glass px-3 py-2 text-xs font-mono uppercase tracking-widest hover:text-accent"
+      aria-label={m ? "Unmute" : "Mute"}
+      title={m ? "Unmute" : "Mute"}
+    >
+      {m ? "🔇" : "🔊"}
+    </button>
+  );
+}
+
 function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, startLevel, hud }: any) {
   // mute toggle state synced with localStorage
   // (defined inline in MuteButton)
