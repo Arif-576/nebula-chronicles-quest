@@ -108,6 +108,7 @@ function GameApp() {
 
   const claimReward = useCallback(async () => {
     if (!reward || !progress || !userId) { setReward(null); return; }
+    sfx.reward();
     const next: Progress = {
       ...progress,
       diamonds: progress.diamonds + reward.diamonds,
@@ -132,7 +133,7 @@ function GameApp() {
       {authed && progress && screen === "menu" && (
         <Menu
           name={name} setName={setName}
-          onPlay={() => setScreen("play")}
+          onPlay={() => { initAudio(); setScreen("play"); }}
           onLB={() => setScreen("leaderboard")}
           progress={progress}
           onSignOut={async () => { await supabase.auth.signOut(); setAuthed(false); setProgress(null); }}
