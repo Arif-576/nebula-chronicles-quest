@@ -29,11 +29,12 @@ export const MAX_LEVEL = REGIONS[REGIONS.length - 1].endLevel;
 export function difficulty(level: number) {
   const t = Math.max(0, level - 1);
   return {
-    enemyHp: 1 + t * 0.18,
-    enemySpeed: 1 + t * 0.035,
-    enemyFire: 0.005 + t * 0.0009,
-    spawnDelay: Math.max(110, 700 - t * 22),
-    waveCount: 5 + Math.floor(t * 1.6),
+    enemyHp: 1 + t * 0.22,
+    enemySpeed: 1 + t * 0.045,
+    enemyFire: 0.007 + t * 0.0012,
+    spawnDelay: Math.max(95, 680 - t * 24),
+    waveCount: 6 + Math.floor(t * 1.7),
+    bulletSpeed: 1 + t * 0.025,
   };
 }
 
