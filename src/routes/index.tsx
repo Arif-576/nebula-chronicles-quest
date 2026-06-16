@@ -8,6 +8,7 @@ import { SHIPS, SHIP_BY_ID, type ShipDef, type ShipId } from "@/game/ships";
 import { MAX_LEVEL, regionForLevel, difficulty, bossReward } from "@/game/regions";
 import { loadProgress, saveProgress, shipUpgrades, type Progress } from "@/lib/progress";
 import { ShipIcon as ShipBadge, hullPathPoints } from "@/game/ShipIcon";
+import { sfx, initAudio, isMuted, toggleMuted } from "@/lib/sfx";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -107,6 +108,7 @@ function GameApp() {
 
   const claimReward = useCallback(async () => {
     if (!reward || !progress || !userId) { setReward(null); return; }
+    sfx.reward();
     const next: Progress = {
       ...progress,
       diamonds: progress.diamonds + reward.diamonds,
@@ -131,7 +133,7 @@ function GameApp() {
       {authed && progress && screen === "menu" && (
         <Menu
           name={name} setName={setName}
-          onPlay={() => setScreen("play")}
+          onPlay={() => { initAudio(); setScreen("play"); }}
           onLB={() => setScreen("leaderboard")}
           progress={progress}
           onSignOut={async () => { await supabase.auth.signOut(); setAuthed(false); setProgress(null); }}
@@ -343,7 +345,23 @@ function RewardBox({ reward, onClaim }: { reward: { diamonds: number; coins: num
   );
 }
 
+function MuteButton() {
+  const [m, setM] = useState(isMuted());
+  return (
+    <button
+      onClick={() => { initAudio(); setM(toggleMuted()); }}
+      className="absolute right-4 bottom-4 z-20 rounded-full glass px-3 py-2 text-xs font-mono uppercase tracking-widest hover:text-accent"
+      aria-label={m ? "Unmute" : "Mute"}
+      title={m ? "Unmute" : "Mute"}
+    >
+      {m ? "🔇" : "🔊"}
+    </button>
+  );
+}
+
 function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, startLevel, hud }: any) {
+  // mute toggle state synced with localStorage
+  // (defined inline in MuteButton)
   // Derive legacy "upgrades" shape from cloud progress + ship upgrades.
   const su = shipUpgrades(progress as Progress, shipDef.id as ShipId);
   const upgrades = {
@@ -472,11 +490,13 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
         t: 0, fireT: 600, name: def.name, color: def.color, accent: def.accent, dashCD: 4000,
       };
       bossIntroT = 1200;
+      sfx.bossSpawn();
     };
 
     const novaBomb = () => {
       if (ship.bombs <= 0 || ship.bombCD > 0) return;
       ship.bombs--; ship.bombCD = 900;
+      sfx.bomb();
       spawnExplosion(ship.x, ship.y, "#22d3ee", 60);
       spawnExplosion(ship.x, ship.y, "#f0abfc", 40);
       ebullets.length = 0;
@@ -492,6 +512,7 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
       if (ship.shieldCD > 0) return;
       ship.shieldT = 4200 + upgrades.shield * 200;
       ship.shieldCD = 9000;
+      sfx.shield();
       spawnExplosion(ship.x, ship.y, "#22d3ee", 36);
     };
     actionsRef.current = { shield: shieldBurst, bomb: novaBomb };
@@ -522,6 +543,7 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
       if ((wantFire || true) && ship.cool <= 0) {
         const fireDelay = 220 / (upgrades.fire * shipDef.fireMul);
         ship.cool = fireDelay;
+        sfx.shoot();
         const bSize = shipDef.id === "titan" ? 5 : 3;
         bullets.push({ x: ship.x - 8, y: ship.y - 10, vx: 0, vy: -12, r: bSize, type: "p" });
         bullets.push({ x: ship.x + 8, y: ship.y - 10, vx: 0, vy: -12, r: bSize, type: "p" });
@@ -660,6 +682,7 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
       for (let i = powerups.length - 1; i >= 0; i--) {
         const p = powerups[i]; p.y += p.vy;
         if (Math.hypot(p.x - ship.x, p.y - ship.y) < ship.r + p.r) {
+          sfx.powerup();
           if (p.type === "heal") ship.hp = Math.min(ship.maxHp, ship.hp + 30);
           else if (p.type === "credit") credits += 25;
           else if (p.type === "bomb") ship.bombs = Math.min(5, ship.bombs + 1);
@@ -722,9 +745,10 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
           }
         }
         if (Math.hypot(boss.x - ship.x, boss.y - ship.y) < boss.r + ship.r) {
-          if (ship.shieldT <= 0 && ship.inv <= 0) { ship.hp -= 30; ship.inv = 500; spawnExplosion(ship.x, ship.y, boss.color, 16); }
+          if (ship.shieldT <= 0 && ship.inv <= 0) { ship.hp -= 30; ship.inv = 500; spawnExplosion(ship.x, ship.y, boss.color, 16); sfx.playerHit(); }
         }
         if (boss.hp <= 0) {
+          sfx.bossKill();
           spawnExplosion(boss.x, boss.y, boss.color, 80);
           spawnExplosion(boss.x, boss.y, boss.accent, 60);
           score += 2000 + wave * 100;
@@ -757,6 +781,7 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
             e.hp! -= baseDmg * upgrades.dmg * odMul;
             spawnExplosion(b.x, b.y, "#22d3ee", 4);
             if (e.hp! <= 0) {
+              sfx.enemyKill();
               spawnExplosion(e.x, e.y, e.type === "tank" ? "#f0abfc" : "#a855f7", 22);
               const base = e.type === "tank" ? 220 : e.type === "fast" ? 80 : e.type === "weaver" ? 140 : e.type === "splitter" ? 180 : 100;
               combo++; comboT = 1600; comboBest = Math.max(comboBest, combo);
@@ -764,7 +789,7 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
               const reward = Math.round(base * mult);
               score += reward;
               addFloat(e.x, e.y - 6, `+${reward}`, combo >= 5 ? "#facc15" : "#22d3ee");
-              if (combo >= 5 && combo % 5 === 0) addFloat(e.x, e.y - 22, `x${combo} COMBO`, "#f0abfc");
+              if (combo >= 5 && combo % 5 === 0) { addFloat(e.x, e.y - 22, `x${combo} COMBO`, "#f0abfc"); sfx.combo(); }
               if (e.type === "tank") addShake(8, 260);
               else addShake(3, 120);
               // Splitter spawns two faster shards on death.
@@ -791,7 +816,7 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
         if (Math.hypot(b.x - ship.x, b.y - ship.y) < ship.r + b.r) {
           ebullets.splice(i, 1);
           if (ship.shieldT > 0) { spawnExplosion(b.x, b.y, "#22d3ee", 6); }
-          else if (ship.inv <= 0) { ship.hp -= 12; ship.inv = 300; spawnExplosion(ship.x, ship.y, "#fb7185", 10); }
+          else if (ship.inv <= 0) { ship.hp -= 12; ship.inv = 300; spawnExplosion(ship.x, ship.y, "#fb7185", 10); sfx.playerHit(); }
         }
       }
       // ram
@@ -799,7 +824,7 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
         const e = enemies[i];
         if (Math.hypot(e.x - ship.x, e.y - ship.y) < e.r + ship.r) {
           enemies.splice(i, 1); spawnExplosion(e.x, e.y, "#f0abfc", 20);
-          if (ship.shieldT <= 0 && ship.inv <= 0) { ship.hp -= 20; ship.inv = 400; }
+          if (ship.shieldT <= 0 && ship.inv <= 0) { ship.hp -= 20; ship.inv = 400; sfx.playerHit(); }
         }
       }
 
@@ -829,6 +854,7 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
         cancelAnimationFrame(raf);
         addShake(18, 600);
         spawnExplosion(ship.x, ship.y, "#f0abfc", 60);
+        sfx.gameOver();
         setTimeout(() => onEnd(Math.floor(score), wave, credits), 300);
       }
 
@@ -1079,6 +1105,7 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
       <button onClick={onQuit} className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-full glass px-4 py-2 text-xs uppercase tracking-widest hover:text-accent">
         Eject
       </button>
+      <MuteButton />
 
       {localHud.boss && (
         <div className="pointer-events-none absolute inset-x-0 top-20 z-10 mx-auto max-w-md px-4">
