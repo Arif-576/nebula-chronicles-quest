@@ -478,6 +478,7 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
     const novaBomb = () => {
       if (ship.bombs <= 0 || ship.bombCD > 0) return;
       ship.bombs--; ship.bombCD = 900;
+      sfx.bomb();
       spawnExplosion(ship.x, ship.y, "#22d3ee", 60);
       spawnExplosion(ship.x, ship.y, "#f0abfc", 40);
       ebullets.length = 0;
@@ -493,6 +494,7 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
       if (ship.shieldCD > 0) return;
       ship.shieldT = 4200 + upgrades.shield * 200;
       ship.shieldCD = 9000;
+      sfx.shield();
       spawnExplosion(ship.x, ship.y, "#22d3ee", 36);
     };
     actionsRef.current = { shield: shieldBurst, bomb: novaBomb };
@@ -523,6 +525,7 @@ function Game({ progress, ship: shipDef, onHud, onEnd, onQuit, onBossKilled, sta
       if ((wantFire || true) && ship.cool <= 0) {
         const fireDelay = 220 / (upgrades.fire * shipDef.fireMul);
         ship.cool = fireDelay;
+        sfx.shoot();
         const bSize = shipDef.id === "titan" ? 5 : 3;
         bullets.push({ x: ship.x - 8, y: ship.y - 10, vx: 0, vy: -12, r: bSize, type: "p" });
         bullets.push({ x: ship.x + 8, y: ship.y - 10, vx: 0, vy: -12, r: bSize, type: "p" });
