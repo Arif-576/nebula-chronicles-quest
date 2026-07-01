@@ -1,13 +1,29 @@
 [build]
   command = "bun run build"
+  # Nitro's `netlify` preset emits static assets into `dist/` and the SSR
+  # handler into `.netlify/functions-internal/server`. Netlify auto-wires the
+  # function; we just publish the static output.
   publish = "dist"
 
 [build.environment]
   NODE_VERSION = "20"
+  # Tell Nitro (bundled with TanStack Start) to build for Netlify instead of
+  # the default Cloudflare Workers target. This is what makes SSR + server
+  # functions actually run on Netlify.
+  NITRO_PRESET = "netlify"
   VITE_SUPABASE_URL = "https://mtyohphyaqjcmpjrsjnz.supabase.co"
   VITE_SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10eW9ocGh5YXFqY21wanJzam56Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyMTkyOTAsImV4cCI6MjA5Njc5NTI5MH0.tXcXkhC7KNcQ5xRe3PLYBAobhk29wjui7oqah9p0kXY"
   VITE_SUPABASE_PROJECT_ID = "mtyohphyaqjcmpjrsjnz"
+  # Runtime (server-side) mirrors of the same values. Server functions read
+  # these via `process.env.*`. Safe to expose — publishable key + URL only.
+  SUPABASE_URL = "https://mtyohphyaqjcmpjrsjnz.supabase.co"
+  SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10eW9ocGh5YXFqY21wanJzam56Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyMTkyOTAsImV4cCI6MjA5Njc5NTI5MH0.tXcXkhC7KNcQ5xRe3PLYBAobhk29wjui7oqah9p0kXY"
 
+# SPA fallback: if the SSR function is unavailable for any reason, unmatched
+# routes fall through to the client bundle's index.html so the app still
+# hydrates and Supabase (browser client) keeps working end-to-end. When the
+# Netlify SSR function IS present, Netlify's own routing takes precedence
+# over this redirect for dynamic requests.
 [[redirects]]
   from = "/*"
   to = "/index.html"
