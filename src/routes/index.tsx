@@ -350,11 +350,41 @@ function MuteButton() {
   return (
     <button
       onClick={() => { initAudio(); setM(toggleMuted()); }}
-      className="absolute right-4 bottom-4 z-20 rounded-full glass px-3 py-2 text-xs font-mono uppercase tracking-widest hover:text-accent"
+      className={`group absolute right-3 top-3 z-30 flex h-10 w-10 items-center justify-center rounded-full border backdrop-blur-md transition-all duration-300 ${
+        m
+          ? "border-white/10 bg-white/5 text-white/50 hover:text-white/90"
+          : "border-accent/40 bg-accent/10 text-accent shadow-[0_0_18px_rgba(168,85,247,0.35)] hover:shadow-[0_0_26px_rgba(168,85,247,0.55)]"
+      }`}
       aria-label={m ? "Unmute" : "Mute"}
       title={m ? "Unmute" : "Mute"}
     >
-      {m ? "🔇" : "🔊"}
+      <svg
+        viewBox="0 0 24 24"
+        className="h-4 w-4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M4 10v4a1 1 0 0 0 1 1h3l4 3.5V5.5L8 9H5a1 1 0 0 0-1 1z" fill="currentColor" stroke="none" />
+        {m ? (
+          <>
+            <line x1="17" y1="9" x2="22" y2="14" />
+            <line x1="22" y1="9" x2="17" y2="14" />
+          </>
+        ) : (
+          <>
+            <path d="M16 8.5a5 5 0 0 1 0 7" className="opacity-90 transition-transform duration-500 group-hover:scale-110" />
+            <path d="M19 6a8 8 0 0 1 0 12" className="opacity-70" />
+          </>
+        )}
+      </svg>
+      <span
+        className={`pointer-events-none absolute inset-0 rounded-full transition-opacity duration-500 ${
+          m ? "opacity-0" : "opacity-100 animate-pulse bg-accent/5"
+        }`}
+      />
     </button>
   );
 }
