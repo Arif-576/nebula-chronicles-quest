@@ -1,0 +1,14 @@
+[build]
+  command = "bun run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+  VITE_SUPABASE_URL = "https://mtyohphyaqjcmpjrsjnz.supabase.co"
+  VITE_SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10eW9ocGh5YXFqY21wanJzam56Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyMTkyOTAsImV4cCI6MjA5Njc5NTI5MH0.tXcXkhC7KNcQ5xRe3PLYBAobhk29wjui7oqah9p0kXY"
+  VITE_SUPABASE_PROJECT_ID = "mtyohphyaqjcmpjrsjnz"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
